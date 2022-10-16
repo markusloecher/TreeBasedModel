@@ -1,10 +1,25 @@
 import numpy as np
 import pandas as pd
 from collections import Counter
+import copy
 
 class Node:
-    def __init__(self, feature=None, feature_name=None, threshold=None, left=None, right=None, gain=None,
-                 id=None, depth=None, leaf_node=False,samples=None, gini=None,*,value=None, clf_value_dis=None):
+    def __init__(self,
+                 feature=None,
+                 feature_name=None,
+                 threshold=None,
+                 left=None,
+                 right=None,
+                 gain=None,
+                 id=None,
+                 depth=None,
+                 leaf_node=False,
+                 samples=None,
+                 gini=None,
+                 *,
+                 value=None,
+                 clf_value_dis=None,
+                 clf_prob_dis=None):
         self.feature = feature
         self.feature_name = feature_name
         self.threshold = threshold
@@ -14,6 +29,7 @@ class Node:
         self.gini = gini
         self.value = value
         self.clf_value_dis = clf_value_dis
+        self.clf_prob_dis = clf_prob_dis
         self.id = id
         self.depth = depth
         self.samples = samples
@@ -33,6 +49,8 @@ class DecisionTree:
                  treetype="classification",
                  k=None,
                  feature_names=None,
+                 HShrinkage=False,
+                 HS_lambda=0,
                  random_state=None):
         self.min_samples_split=min_samples_split
         self.min_samples_leaf = min_samples_leaf # Still need to be implemented
@@ -43,8 +61,10 @@ class DecisionTree:
         self.criterion=criterion
         self.k=k
         self.treetype = treetype
+        self.HShrinkage = HShrinkage
+        self.HS_lambda = HS_lambda
         self.random_state = np.random.default_rng(random_state)
-        self.id_counter=0
+        self.n_nodes=0
         self.oob_preds=None #only for random forests
 
 
@@ -52,6 +72,7 @@ class DecisionTree:
         self.n_features = X.shape[1] if not self.n_features else min(X.shape[1],self.n_features)
         self.node_list = []
         self.node_id_dict = {}
+        self.no_samples_total = y.shape[0]
 
         if isinstance(X, pd.DataFrame):
             self.feature_names = X.columns
@@ -63,6 +84,10 @@ class DecisionTree:
 
         #Sort node_list by node id
         self.node_list = sorted(self.node_list, key=lambda o: o.id)
+
+        #Apply Hierarchical Shrinkage (change value (prediction) in leaf
+        if self.HShrinkage:
+            self._apply_hierarchical_srinkage(treetype=self.treetype)
 
         # Create dict of dict for all nodes with important attributes per node
         for node in self.node_list:
@@ -77,6 +102,19 @@ class DecisionTree:
                 "samples": node.samples,
                 "value": node.value
             }
+            if self.treetype=="classification":
+                self.node_id_dict[
+                    node.id]["value_distribution"] = node.clf_value_dis
+                self.node_id_dict[
+                    node.id]["prob_distribution"] = node.clf_prob_dis
+
+        #Set max tree depth as class attributes
+        depth_list = [len(i) for i in self.decision_paths]
+        self.max_depth_ = max(depth_list)
+
+        #Set feature_importances_ (aka information_gain_scaled) as class attribute
+        self._get_feature_importance()
+
 
     def _grow_tree(self, X, y, depth=0, feature_names=None):
         n_samples, n_feats = X.shape
@@ -84,12 +122,16 @@ class DecisionTree:
 
         #Calculate leaf value
         if self.treetype == "classification":
-            leaf_value = self._most_common_label(y)
+            #leaf_value = self._most_common_label(y)
             counter = Counter(y)
-            clf_value_dis = {0: counter.get(0) or 0, 1: counter.get(1) or 0}
+            clf_value_dis = [counter.get(0) or 0, counter.get(1) or 0]
+            clf_prob_dis = (np.array(clf_value_dis) / n_samples)
+            leaf_value = np.argmax(clf_prob_dis)
+
         elif self.treetype == "regression":
             leaf_value = self._mean_label(y)
             clf_value_dis = None
+            clf_prob_dis = None
 
         # check the stopping criteria and creates leaf
         if (depth >= self.max_depth or n_labels == 1
@@ -97,6 +139,7 @@ class DecisionTree:
                 or n_samples < 2*self.min_samples_leaf):
             node = Node(value=leaf_value,
                         clf_value_dis=clf_value_dis,
+                        clf_prob_dis = clf_prob_dis,
                         leaf_node=True,
                         gini=self._gini(y),
                         depth=depth,
@@ -125,10 +168,11 @@ class DecisionTree:
                     left,
                     right,
                     best_gain,
-                    gini = self._gini(y),
+                    gini=self._gini(y),
                     depth=depth,
                     value=leaf_value,
                     clf_value_dis=clf_value_dis,
+                    clf_prob_dis=clf_prob_dis,
                     samples=n_samples)
         self.node_list.append(node)
         return node
@@ -188,8 +232,8 @@ class DecisionTree:
             g_l, g_r = self._gini(y[left_idxs]), self._gini(y[right_idxs])
             child_gini = (n_l/n) * g_l + (n_r/n) * g_r
 
-            # calculate the IG
-            information_gain = parent_gini - child_gini
+            # calculate the IG (weighted impurity)
+            information_gain = (n / self.no_samples_total) * (parent_gini -child_gini)
 
         return information_gain
 
@@ -231,11 +275,6 @@ class DecisionTree:
         #print(n)
         return impurity
 
-    def _most_common_label(self, y):
-        counter = Counter(y)
-        value = counter.most_common(1)[0][0]
-        return value
-
     def _mean_label(self,y):
         return np.mean(y)
 
@@ -262,17 +301,101 @@ class DecisionTree:
         '''Walks down each decision path from root node to each leaf and sets id for each node'''
         if node.left or node.right:
             if node.id is None:
-                node.id = self.id_counter
-                self.id_counter += 1
+                node.id = self.n_nodes
+                self.n_nodes += 1
             yield from self._paths(node.left, (*p, node.id))
             yield from self._paths(node.right, (*p, node.id))
         else:
             if node.id is None:
-                node.id = self.id_counter
-                self.id_counter += 1
+                node.id = self.n_nodes
+                self.n_nodes += 1
             yield (*p, node.id)
 
+    def _apply_hierarchical_srinkage(self, treetype):
 
+        if treetype=="regression":
+            node_values_HS = np.zeros(len(self.node_list))
+
+            #Iterate through all decision path
+            for decision_path in self.decision_paths:
+
+                #leaf_id = decision_path[-1]
+
+                # Calculate telescoping sum as defined in orig. paper (https://proceedings.mlr.press/v162/agarwal22b/agarwal22b.pdf)
+                cum_sum = 0
+                for l, node_id in enumerate(decision_path):
+                    if l==0:
+                        cum_sum = self.node_list[node_id].value
+                        node_values_HS[node_id] = cum_sum
+                        continue
+
+                    current_node = self.node_list[node_id]
+                    node_id_parent = decision_path[l-1]
+                    parent_node = self.node_list[node_id_parent]
+
+                    cum_sum += ((current_node.value - parent_node.value) / (
+                        1 + self.HS_lambda/parent_node.samples))
+
+                    # Replace value of node with HS value outcome
+                    node_values_HS[node_id] = cum_sum
+
+            for node_id, value in enumerate(node_values_HS):
+                self.node_list[node_id].value = value
+
+        elif treetype=="classification":
+
+            # Create deep copies of relevant attributes (otherwise original values will be overwritten)
+            decision_paths = copy.deepcopy(self.decision_paths)
+            clf_prob_dist = np.stack(copy.deepcopy([node_id.clf_prob_dis for node_id in self.node_list]), axis=0 )
+            node_samples = copy.deepcopy([node_id.samples for node_id in self.node_list])
+
+            #Get empty array with no rows == no of nodes and 2 columns (for class 0 and class 1)
+            node_values_HS = np.zeros((len(node_samples),2))
+
+            #Iterate through all decision path
+            for decision_path in decision_paths:
+
+                #Get empty array with no rows == no of nodes and 2 columns (for class 0 and class 1)
+                node_values_ = np.zeros((len(node_samples),2))
+
+                # Calculate telescoping sum as defined in orig. paper (https://proceedings.mlr.press/v162/agarwal22b/agarwal22b.pdf)
+                cum_sum = 0
+                for l, node_id in enumerate(decision_path):
+                    if l == 0:
+                        cum_sum = copy.deepcopy(clf_prob_dist[node_id])
+
+                        node_values_[node_id] = cum_sum
+                        continue
+
+                    node_id_parent = decision_path[l - 1]
+
+                    cum_sum += ((clf_prob_dist[node_id]-clf_prob_dist[node_id_parent])/(1 + self.HS_lambda / node_samples[node_id_parent]))
+
+                    node_values_[node_id] = cum_sum
+                for node_id in decision_path:
+                    node_values_HS[node_id] = node_values_[node_id]
+
+            # Update class attributes
+            for node_id in range(len(self.node_list)):
+                self.node_list[node_id].clf_prob_dis = node_values_HS[node_id]
+                self.node_list[node_id].value = np.argmax(self.node_list[node_id].clf_prob_dis)
+
+    def _get_feature_importance(self):
+
+        feature_importance = np.zeros(self.n_features)
+        features_list = [i.feature for i in self.node_list]
+        feat_imp_p_node = np.nan_to_num(
+            np.array([i.gain for i in self.node_list], dtype=float))
+
+        for feat_num, feat_imp in zip(features_list, feat_imp_p_node):
+            if feat_num is not None:
+                feature_importance[feat_num] = feat_imp
+
+        # Normalize information gain (total sum == 1)
+        feature_importance_scaled = np.divide(feature_importance,
+                                              (np.sum(feature_importance)))
+
+        self.feature_importances_ = feature_importance_scaled
 
 #class ClassificationTree(DecisionTree):
 #

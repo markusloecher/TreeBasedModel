@@ -6,8 +6,19 @@ from warnings import warn, catch_warnings, simplefilter
 from sklearn.metrics import mean_squared_error, accuracy_score
 
 class RandomForest:
-    def __init__(self, n_trees=10, max_depth=10, min_samples_split=2, min_samples_leaf=1, n_feature=None,
-                 oob = True, criterion="gini", treetype="classification", k=None, random_state=None):
+    def __init__(self,
+                 n_trees=10,
+                 max_depth=10,
+                 min_samples_split=2,
+                 min_samples_leaf=1,
+                 n_feature=None,
+                 oob=True,
+                 criterion="gini",
+                 treetype="classification",
+                 HShrinkage=False,
+                 HS_lambda=0,
+                 k=None,
+                 random_state=None):
         self.n_trees = n_trees
         self.max_depth=max_depth
         self.min_samples_split=min_samples_split
@@ -16,6 +27,8 @@ class RandomForest:
         self.oob = oob
         self.criterion = criterion
         self.k = k
+        self.HShrinkage = HShrinkage
+        self.HS_lambda = HS_lambda
         self.treetype = treetype
         self.random_state = np.random.default_rng(random_state)
         self.trees = []
@@ -39,6 +52,8 @@ class RandomForest:
                                 criterion=self.criterion,
                                 treetype=self.treetype,
                                 feature_names = self.feature_names,
+                                HShrinkage= self.HShrinkage,
+                                HS_lambda = self.HS_lambda,
                                 k=self.k,
                                 random_state=self.random_state)
 

@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from collections import Counter
 import copy
+import numbers
 
 class Node:
     def __init__(self,
@@ -55,7 +56,7 @@ class DecisionTree:
         self.min_samples_split=min_samples_split
         self.min_samples_leaf = min_samples_leaf # Still need to be implemented
         self.max_depth=max_depth
-        self.n_features=n_features
+        self.n_features=n_features #for feature subsampling
         self.feature_names = feature_names
         self.root=None
         self.criterion=criterion
@@ -63,20 +64,36 @@ class DecisionTree:
         self.treetype = treetype
         self.HShrinkage = HShrinkage
         self.HS_lambda = HS_lambda
-        self.random_state = np.random.default_rng(random_state)
+        self.random_state = self._check_random_state(random_state)
+        #self.random_state = np.random.default_rng(random_state)
+        #if isinstance(random_state, np.random._generator.Generator):
+        #    self.random_state = random_state
+        #else:
+        #    self.random_state = np.random.default_rng(random_state)
         self.n_nodes=0
         self.oob_preds=None #only for random forests
 
+    def _check_random_state(self, seed):
+        if isinstance(seed, numbers.Integral):
+            #return np.random.RandomState(seed)
+            return np.random.default_rng(seed)
+        if isinstance(seed, np.random.RandomState):
+            return seed
 
     def fit(self, X, y):
         self.n_features = X.shape[1] if not self.n_features else min(X.shape[1],self.n_features)
+        self.features_in_ = range(X.shape[1])
         self.node_list = []
         self.node_id_dict = {}
         self.no_samples_total = y.shape[0]
 
         if isinstance(X, pd.DataFrame):
             self.feature_names = X.columns
+            self.features_in_ = X.columns
             X = X.values
+        if isinstance(y, pd.Series):
+            y = y.values
+
         self.root = self._grow_tree(X, y, feature_names=self.feature_names)
 
         # Set decision paths and node ids as class attributes
@@ -106,14 +123,14 @@ class DecisionTree:
                 self.node_id_dict[
                     node.id]["value_distribution"] = node.clf_value_dis
                 self.node_id_dict[
-                    node.id]["prob_distribution"] = node.clf_prob_dis
+                    node.id]["prob_distribution"] = list(node.clf_prob_dis)
 
         #Set max tree depth as class attributes
         depth_list = [len(i) for i in self.decision_paths]
         self.max_depth_ = max(depth_list)
 
         #Set feature_importances_ (aka information_gain_scaled) as class attribute
-        self._get_feature_importance()
+        self._get_feature_importance(X)
 
 
     def _grow_tree(self, X, y, depth=0, feature_names=None):
@@ -122,7 +139,6 @@ class DecisionTree:
 
         #Calculate leaf value
         if self.treetype == "classification":
-            #leaf_value = self._most_common_label(y)
             counter = Counter(y)
             clf_value_dis = [counter.get(0) or 0, counter.get(1) or 0]
             clf_prob_dis = (np.array(clf_value_dis) / n_samples)
@@ -134,26 +150,38 @@ class DecisionTree:
             clf_prob_dis = None
 
         # check the stopping criteria and creates leaf
-        if (depth >= self.max_depth or n_labels == 1
-                or n_samples < self.min_samples_split
-                or n_samples < 2*self.min_samples_leaf):
-            node = Node(value=leaf_value,
-                        clf_value_dis=clf_value_dis,
-                        clf_prob_dis = clf_prob_dis,
-                        leaf_node=True,
-                        gini=self._gini(y),
-                        depth=depth,
-                        samples=n_samples)
-            self.node_list.append(node)
+        if ((self.max_depth is not None) and ((depth >= self.max_depth)) or (n_labels == 1)
+                or (n_samples < self.min_samples_split)):
+            #or (n_samples < 2*self.min_samples_leaf)):
+            node = self._create_leaf(leaf_value, clf_value_dis, clf_prob_dis,
+                                y, depth, n_samples)
             return node
 
+        # Random feature subsampling at each split point
+        #if self.n_features is not None:
         feat_idxs = self.random_state.choice(n_feats, self.n_features, replace=False)
+        #else:
+        #    feat_idxs = np.arange(n_feats)
 
         # find the best split
         best_feature, best_thresh, best_gain = self._best_split(X, y, feat_idxs)
 
-        # create child nodes
+        # If no imporvement is found: Create leaf
+        if (best_gain==-1) or (best_feature is None) or (best_thresh is None):
+            node = self._create_leaf(leaf_value, clf_value_dis, clf_prob_dis,
+                                y, depth, n_samples)
+            return node
+
+        # split samples in left and right child
         left_idxs, right_idxs = self._split(X[:, best_feature], best_thresh)
+
+        # If no of childs on one side is smaller than the parameter value: Create leaf
+        if (len(left_idxs)<self.min_samples_leaf) or (len(right_idxs)<self.min_samples_leaf):
+            node = self._create_leaf(leaf_value, clf_value_dis, clf_prob_dis,
+                    y, depth, n_samples)
+            return node
+
+        # create child nodes
         left = self._grow_tree(X[left_idxs, :], y[left_idxs], depth+1, feature_names)
         right = self._grow_tree(X[right_idxs, :], y[right_idxs], depth+1, feature_names)
 
@@ -178,8 +206,21 @@ class DecisionTree:
         return node
 
 
+    def _create_leaf(self, leaf_value, clf_value_dis, clf_prob_dis, y, depth, n_samples):
+
+        node = Node(value=leaf_value,
+            clf_value_dis=clf_value_dis,
+            clf_prob_dis = clf_prob_dis,
+            leaf_node=True,
+            gini=self._gini(y),
+            depth=depth,
+            samples=n_samples)
+        self.node_list.append(node)
+
+        return node
+
     def _best_split(self, X, y, feat_idxs):
-        best_gain = -1
+        best_gain = np.array([-1])
         split_idx, split_threshold = None, None
 
         for feat_idx in feat_idxs:
@@ -192,12 +233,27 @@ class DecisionTree:
                 # calculate the information gain
                 gain = self._information_gain(y, X_column, thr)
 
-                if gain > best_gain:
-                    best_gain = gain
-                    split_idx = feat_idx
-                    split_threshold = thr
+                #                if gain > best_gain:
+                #                    best_gain = gain
+                #                    split_idx = feat_idx
+                #                    split_threshold = thr
 
-        return split_idx, split_threshold, best_gain
+                # if gain>best_gain --> replace gain, splitidx and thres
+                if gain > best_gain.max():
+                    best_gain = np.array([gain])
+                    split_idx = np.array([feat_idx])
+                    split_threshold = np.array([thr])
+
+                # elif gain==best_gain --> create list and append
+                elif gain == best_gain.all():
+                    best_gain = np.append(best_gain, gain)
+                    split_idx = np.append(split_idx, feat_idx)
+                    split_threshold = np.append(split_threshold, thr)
+
+        # Draw random gain/thres/feature from best splits
+        idx_best = self.random_state.choice(best_gain.size, 1)[0]
+        return split_idx[idx_best], split_threshold[idx_best], best_gain[idx_best]
+        #return split_idx, split_threshold, best_gain
 
 
     def _information_gain(self, y, X_column, threshold):
@@ -265,7 +321,7 @@ class DecisionTree:
             if len(y) == 0:   # empty data
                 impurity = 0
             else:
-                impurity = np.mean((y-np.mean(y))**2) # RMSE
+                impurity = np.mean((y-np.mean(y))**2) # MSE
 
         # for binary case, finite sample correction, impurity is weighted by n/(n-1)
         if (k != None) and (n>k):
@@ -380,9 +436,9 @@ class DecisionTree:
                 self.node_list[node_id].clf_prob_dis = node_values_HS[node_id]
                 self.node_list[node_id].value = np.argmax(self.node_list[node_id].clf_prob_dis)
 
-    def _get_feature_importance(self):
+    def _get_feature_importance(self, X):
 
-        feature_importance = np.zeros(self.n_features)
+        feature_importance = np.zeros(X.shape[1])
         features_list = [i.feature for i in self.node_list]
         feat_imp_p_node = np.nan_to_num(
             np.array([i.gain for i in self.node_list], dtype=float))

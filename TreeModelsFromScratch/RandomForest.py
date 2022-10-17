@@ -4,14 +4,16 @@ import pandas as pd
 from collections import Counter
 from warnings import warn, catch_warnings, simplefilter
 from sklearn.metrics import mean_squared_error, accuracy_score
+import numbers
 
 class RandomForest:
     def __init__(self,
                  n_trees=10,
-                 max_depth=10,
+                 max_depth=None,
                  min_samples_split=2,
                  min_samples_leaf=1,
                  n_feature=None,
+                 bootstrap=True,
                  oob=True,
                  criterion="gini",
                  treetype="classification",
@@ -24,15 +26,24 @@ class RandomForest:
         self.min_samples_split=min_samples_split
         self.min_samples_leaf = min_samples_leaf  # Still need to be implemented
         self.n_features=n_feature
+        self.bootstrap=bootstrap
         self.oob = oob
         self.criterion = criterion
         self.k = k
         self.HShrinkage = HShrinkage
         self.HS_lambda = HS_lambda
         self.treetype = treetype
-        self.random_state = np.random.default_rng(random_state)
+        self.random_state = self._check_random_state(random_state)
+        #self.random_state = np.random.default_rng(random_state)
         self.trees = []
         self.feature_names = None
+
+    def _check_random_state(self, seed):
+        if isinstance(seed, numbers.Integral):
+            return np.random.RandomState(seed)
+            #return np.random.default_rng(seed)
+        if isinstance(seed, np.random.RandomState):
+            return seed
 
     def fit(self, X, y):
         self.trees = []
@@ -41,7 +52,13 @@ class RandomForest:
             self.feature_names = X.columns
             X = X.values
 
+        #MAX_INT = np.iinfo(np.int32).max
+
+        #Create random seeds for each tree in the forest
+        #seed_list = self.random_state.randint(MAX_INT, size=self.n_trees)
+
         #Create forest
+        #for _, seed in zip(range(self.n_trees), seed_list):
         for _ in range(self.n_trees):
 
             #Instantiate tree
@@ -51,14 +68,15 @@ class RandomForest:
                                 n_features=self.n_features,
                                 criterion=self.criterion,
                                 treetype=self.treetype,
-                                feature_names = self.feature_names,
-                                HShrinkage= self.HShrinkage,
-                                HS_lambda = self.HS_lambda,
+                                feature_names=self.feature_names,
+                                HShrinkage=self.HShrinkage,
+                                HS_lambda=self.HS_lambda,
                                 k=self.k,
                                 random_state=self.random_state)
 
             #Draw bootstrap samples (inbag)
-            X_inbag, y_inbag, idxs_inbag = self._bootstrap_samples(X, y)
+            X_inbag, y_inbag, idxs_inbag = self._bootstrap_samples(
+                X, y, self.bootstrap, self.random_state) #self._check_random_state(seed))
 
             # Fit tree using inbag samples
             tree.fit(X_inbag, y_inbag)
@@ -107,10 +125,14 @@ class RandomForest:
             elif self.treetype=="regression":
                 self.oob_score = mean_squared_error(y_test_oob, self.oob_preds_forest, squared=False) #RMSE
 
-    def _bootstrap_samples(self, X, y):
-        n_samples = X.shape[0]
-        idxs_inbag = self.random_state.choice(n_samples, n_samples, replace=True)
-        return X[idxs_inbag], y[idxs_inbag], idxs_inbag
+    def _bootstrap_samples(self, X, y, bootstrap, random_state):
+
+        if bootstrap:
+            n_samples = X.shape[0]
+            idxs_inbag = random_state.choice(n_samples, n_samples, replace=True)
+            return X[idxs_inbag], y[idxs_inbag], idxs_inbag
+        else:
+            return X, y, np.arange(X.shape[0])
 
     def _oob_samples(self, X, y, idxs_inbag):
         mask = np.ones(X.shape[0], dtype=bool)

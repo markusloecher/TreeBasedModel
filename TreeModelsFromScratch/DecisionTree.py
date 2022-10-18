@@ -44,7 +44,7 @@ class DecisionTree:
     def __init__(self,
                  min_samples_split=2,
                  min_samples_leaf=1,
-                 max_depth=100,
+                 max_depth=None,
                  n_features=None,
                  criterion="gini",
                  treetype="classification",
@@ -54,10 +54,10 @@ class DecisionTree:
                  HS_lambda=0,
                  random_state=None):
         self.min_samples_split=min_samples_split
-        self.min_samples_leaf = min_samples_leaf # Still need to be implemented
+        self.min_samples_leaf = min_samples_leaf
         self.max_depth=max_depth
         self.n_features=n_features #for feature subsampling
-        self.feature_names = feature_names
+        self.feature_names = feature_names #only relevant for Random Forests
         self.root=None
         self.criterion=criterion
         self.k=k
@@ -74,7 +74,7 @@ class DecisionTree:
         self.oob_preds=None #only for random forests
 
     def _check_random_state(self, seed):
-        if isinstance(seed, numbers.Integral):
+        if isinstance(seed, numbers.Integral) or (seed is None):
             #return np.random.RandomState(seed)
             return np.random.default_rng(seed)
         if isinstance(seed, np.random.RandomState):
@@ -127,7 +127,7 @@ class DecisionTree:
 
         #Set max tree depth as class attributes
         depth_list = [len(i) for i in self.decision_paths]
-        self.max_depth_ = max(depth_list)
+        self.max_depth_ = max(depth_list)-1
 
         #Set feature_importances_ (aka information_gain_scaled) as class attribute
         self._get_feature_importance(X)
@@ -150,8 +150,9 @@ class DecisionTree:
             clf_prob_dis = None
 
         # check the stopping criteria and creates leaf
-        if ((self.max_depth is not None) and ((depth >= self.max_depth)) or (n_labels == 1)
-                or (n_samples < self.min_samples_split)):
+        if ((self.max_depth is not None) and ((depth >= self.max_depth))
+                or (n_labels == 1) or (n_samples < self.min_samples_split)
+                or ((self.k!= None) and (n_samples <= self.k))):
             #or (n_samples < 2*self.min_samples_leaf)):
             node = self._create_leaf(leaf_value, clf_value_dis, clf_prob_dis,
                                 y, depth, n_samples)
@@ -176,7 +177,10 @@ class DecisionTree:
         left_idxs, right_idxs = self._split(X[:, best_feature], best_thresh)
 
         # If no of childs on one side is smaller than the parameter value: Create leaf
-        if (len(left_idxs)<self.min_samples_leaf) or (len(right_idxs)<self.min_samples_leaf):
+        if (len(left_idxs) < self.min_samples_leaf) or (
+                len(right_idxs) < self.min_samples_leaf) or (
+                    (self.k != None) and ((len(left_idxs) <= self.k) or
+                                          (len(right_idxs) <= self.k))):
             node = self._create_leaf(leaf_value, clf_value_dis, clf_prob_dis,
                     y, depth, n_samples)
             return node
@@ -288,7 +292,7 @@ class DecisionTree:
             g_l, g_r = self._gini(y[left_idxs]), self._gini(y[right_idxs])
             child_gini = (n_l/n) * g_l + (n_r/n) * g_r
 
-            # calculate the IG (weighted impurity)
+            # calculate the IG (weighted impurity) (rescaled gain)
             information_gain = (n / self.no_samples_total) * (parent_gini -child_gini)
 
         return information_gain
@@ -326,7 +330,8 @@ class DecisionTree:
         # for binary case, finite sample correction, impurity is weighted by n/(n-1)
         if (k != None) and (n>k):
             impurity = impurity * n / (n-k)
-        #elif (k != None) and (n<=k):
+        elif (k != None) and (n<=k):
+            impurity = 1
         #print("n<=k, error!")
         #print(n)
         return impurity
@@ -448,8 +453,12 @@ class DecisionTree:
                 feature_importance[feat_num] = feat_imp
 
         # Normalize information gain (total sum == 1)
-        feature_importance_scaled = np.divide(feature_importance,
+        if np.sum(feature_importance)!=0:
+            feature_importance_scaled = np.divide(feature_importance,
                                               (np.sum(feature_importance)))
+        # If no split was conducted do not scale because of division by 0 error
+        else:
+            feature_importance_scaled = feature_importance
 
         self.feature_importances_ = feature_importance_scaled
 

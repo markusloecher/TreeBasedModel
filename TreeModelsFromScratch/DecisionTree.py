@@ -344,13 +344,21 @@ class DecisionTree:
             X = X.values
         return np.array([self._traverse_tree(x, self.root) for x in X])
 
-    def _traverse_tree(self, x, node):
+    def predict_proba(self, X):
+        if isinstance(X, pd.DataFrame):
+            X = X.values
+        return np.array([self._traverse_tree(x, self.root, pred_proba=True) for x in X])
+
+    def _traverse_tree(self, x, node, pred_proba=False):
         if node.is_leaf_node():
-            return node.value
+            if pred_proba:
+                return node.clf_prob_dis[1] # return prob for class 1
+            else:
+                return node.value
 
         if x[node.feature] <= node.threshold:
-            return self._traverse_tree(x, node.left)
-        return self._traverse_tree(x, node.right)
+            return self._traverse_tree(x, node.left, pred_proba)
+        return self._traverse_tree(x, node.right, pred_proba)
 
     def _get_decision_paths(self):
         '''Create list of decision path from root node to each existing leaf'''
@@ -461,6 +469,92 @@ class DecisionTree:
             feature_importance_scaled = feature_importance
 
         self.feature_importances_ = feature_importance_scaled
+
+
+    def export_tree_for_SHAP(self):
+
+        # Children
+        children_left = []
+        children_right = []
+
+        # go over all nodes
+        for node in self.node_list:
+
+            # find child node id of corresponding node
+            if node.left is not None:
+                children_left.append(node.left.id)
+            # if leaf return -1
+            else:
+                children_left.append(-1)
+
+            # find child node id of corresponding node
+            if node.right is not None:
+                children_right.append(node.right.id)
+            # if leaf return -1
+            else:
+                children_right.append(-1)
+
+        children_left = np.array(children_left)
+        children_right = np.array(children_right)
+        children_default = children_right.copy()
+
+        #features: replace "None" for features in leaf node with ""-2"
+        features = np.array([
+            node.feature if node.feature is not None else -2
+            for node in self.node_list
+        ])
+
+        # Thresholds: replace "None" for thres in leaf node with ""-2"
+        thresholds = np.array([
+            node.threshold if node.threshold is not None else -2
+            for node in self.node_list
+        ])
+
+        # values in array of arrays of shape (no_nodes, 1)
+        if self.treetype == "regression":
+            values = np.array([node.value for node in self.node_list])
+        elif self.treetype == "classification":
+            values = np.array([node.clf_prob_dis[1] for node in self.node_list])
+        values = values.reshape(values.shape[0], 1)
+
+        #samples
+        samples = np.array([float(node.samples) for node in self.node_list])
+
+        # define a custom tree model
+        tree_dict = {
+            "children_left": children_left,
+            "children_right": children_right,
+            "children_default": children_default,
+            "features": features,
+            "thresholds": thresholds,
+            "values": values,
+            "node_sample_weight": samples
+        }
+        model = {"trees": [tree_dict]}
+
+        return model
+
+    def verify_shap_model(self, explainer, X):
+        '''Verify the integrity of SHAP explainer model by comparing output of export_tree_for_SHAP vs original model'''
+
+        if self.treetype=="classification":
+            # Make sure that the ingested SHAP model (a TreeEnsemble object) makes the same predictions as the original model
+            assert np.abs(explainer.model.predict(X) -
+                        self.predict_proba(X)).max() < 1e-4
+
+            # make sure the SHAP values sum up to the model output (this is the local accuracy property)
+            assert np.abs(explainer.expected_value +
+                        explainer.shap_values(X).sum(1) -
+                        self.predict_proba(X)).max() < 1e-4
+        else:
+            # Make sure that the ingested SHAP model (a TreeEnsemble object) makes the same predictions as the original model
+            assert np.abs(explainer.model.predict(X) -
+                          self.predict(X)).max() < 1e-4
+
+            # make sure the SHAP values sum up to the model output (this is the local accuracy property)
+            assert np.abs(explainer.expected_value +
+                          explainer.shap_values(X).sum(1) -
+                          self.predict(X)).max() < 1e-4
 
 #class ClassificationTree(DecisionTree):
 #

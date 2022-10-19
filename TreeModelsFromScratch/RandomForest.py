@@ -34,7 +34,8 @@ class RandomForest:
         self.HShrinkage = HShrinkage
         self.HS_lambda = HS_lambda
         self.treetype = treetype
-        self.random_state = self._check_random_state(random_state)
+        self.random_state = random_state
+        self.random_state_ = self._check_random_state(random_state)
         #self.random_state = np.random.default_rng(random_state)
         self.trees = []
         self.feature_names = None
@@ -53,14 +54,14 @@ class RandomForest:
             self.feature_names = X.columns
             X = X.values
 
-        #MAX_INT = np.iinfo(np.int32).max
+        MAX_INT = np.iinfo(np.int32).max
 
         #Create random seeds for each tree in the forest
-        #seed_list = self.random_state.randint(MAX_INT, size=self.n_trees)
+        seed_list = self.random_state_.randint(MAX_INT, size=self.n_trees)
 
         #Create forest
-        #for _, seed in zip(range(self.n_trees), seed_list):
-        for _ in range(self.n_trees):
+        for _, seed in zip(range(self.n_trees), seed_list):
+            #for _ in range(self.n_trees):
 
             #Instantiate tree
             tree = DecisionTree(max_depth=self.max_depth,
@@ -73,11 +74,11 @@ class RandomForest:
                                 HShrinkage=self.HShrinkage,
                                 HS_lambda=self.HS_lambda,
                                 k=self.k,
-                                random_state=self.random_state)
+                                random_state=seed)#self.random_state)
 
             #Draw bootstrap samples (inbag)
             X_inbag, y_inbag, idxs_inbag = self._bootstrap_samples(
-                X, y, self.bootstrap, self.random_state) #self._check_random_state(seed))
+                X, y, self.bootstrap, self.random_state_) #self._check_random_state(seed))
 
             # Fit tree using inbag samples
             tree.fit(X_inbag, y_inbag)

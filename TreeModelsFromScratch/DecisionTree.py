@@ -65,7 +65,8 @@ class DecisionTree:
         self.treetype = treetype
         self.HShrinkage = HShrinkage
         self.HS_lambda = HS_lambda
-        self.random_state = self._check_random_state(random_state)
+        self.random_state = random_state
+        self.random_state_ = self._check_random_state(random_state)
         #self.random_state = np.random.default_rng(random_state)
         #if isinstance(random_state, np.random._generator.Generator):
         #    self.random_state = random_state
@@ -76,8 +77,8 @@ class DecisionTree:
 
     def _check_random_state(self, seed):
         if isinstance(seed, numbers.Integral) or (seed is None):
-            #return np.random.RandomState(seed)
-            return np.random.default_rng(seed)
+            return np.random.RandomState(seed)
+            #return np.random.default_rng(seed)
         if isinstance(seed, np.random.RandomState):
             return seed
 
@@ -160,10 +161,10 @@ class DecisionTree:
             return node
 
         # Random feature subsampling at each split point
-        #if self.n_features is not None:
-        feat_idxs = self.random_state.choice(n_feats, self.n_features, replace=False)
-        #else:
-        #    feat_idxs = np.arange(n_feats)
+        if self.n_features is not None:
+            feat_idxs = self.random_state_.choice(n_feats, self.n_features, replace=False)
+        else:
+            feat_idxs = np.arange(n_feats)
 
         # find the best split
         best_feature, best_thresh, best_gain = self._best_split(X, y, feat_idxs)
@@ -256,7 +257,8 @@ class DecisionTree:
                     split_threshold = np.append(split_threshold, thr)
 
         # Draw random gain/thres/feature from best splits
-        idx_best = self.random_state.choice(best_gain.size, 1)[0]
+        idx_best = self.random_state_.choice(best_gain.shape[0], 1)[0]
+
         return split_idx[idx_best], split_threshold[idx_best], best_gain[idx_best]
         #return split_idx, split_threshold, best_gain
 

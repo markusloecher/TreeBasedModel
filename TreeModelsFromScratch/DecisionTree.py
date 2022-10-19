@@ -3,6 +3,7 @@ import pandas as pd
 from collections import Counter
 import copy
 import numbers
+from warnings import warn, catch_warnings, simplefilter
 
 class Node:
     def __init__(self,
@@ -342,17 +343,32 @@ class DecisionTree:
     def predict(self, X):
         if isinstance(X, pd.DataFrame):
             X = X.values
-        return np.array([self._traverse_tree(x, self.root) for x in X])
+
+        if isinstance(X, pd.Series):
+            return np.array(self._traverse_tree(X, self.root))
+        else:
+            return np.array([self._traverse_tree(x, self.root) for x in X])
 
     def predict_proba(self, X):
+
+        # If function is called on a regression tree return nothing
+        if self.treetype is not "classification":
+            message = "This function is only available for classification tasks"
+            warn(message)
+            return
+
         if isinstance(X, pd.DataFrame):
             X = X.values
-        return np.array([self._traverse_tree(x, self.root, pred_proba=True) for x in X])
+
+        if isinstance(X, pd.Series):
+            return np.array(self._traverse_tree(X, self.root, pred_proba=True))
+        else:
+            return np.array([self._traverse_tree(x, self.root, pred_proba=True) for x in X])
 
     def _traverse_tree(self, x, node, pred_proba=False):
         if node.is_leaf_node():
             if pred_proba:
-                return node.clf_prob_dis[1] # return prob for class 1
+                return node.clf_prob_dis
             else:
                 return node.value
 
@@ -471,7 +487,7 @@ class DecisionTree:
         self.feature_importances_ = feature_importance_scaled
 
 
-    def export_tree_for_SHAP(self):
+    def export_tree_for_SHAP(self, return_tree_dict=False):
 
         # Children
         children_left = []
@@ -532,6 +548,8 @@ class DecisionTree:
         }
         model = {"trees": [tree_dict]}
 
+        if return_tree_dict:
+            return model, tree_dict
         return model
 
     def verify_shap_model(self, explainer, X):
@@ -539,13 +557,14 @@ class DecisionTree:
 
         if self.treetype=="classification":
             # Make sure that the ingested SHAP model (a TreeEnsemble object) makes the same predictions as the original model
-            assert np.abs(explainer.model.predict(X) -
-                        self.predict_proba(X)).max() < 1e-4
+            assert np.abs(
+                explainer.model.predict(X) -
+                self.predict_proba(X)[:, 1]).max() < 1e-4
 
             # make sure the SHAP values sum up to the model output (this is the local accuracy property)
             assert np.abs(explainer.expected_value +
-                        explainer.shap_values(X).sum(1) -
-                        self.predict_proba(X)).max() < 1e-4
+                          explainer.shap_values(X).sum(1) -
+                          self.predict_proba(X)[:, 1]).max() < 1e-4
         else:
             # Make sure that the ingested SHAP model (a TreeEnsemble object) makes the same predictions as the original model
             assert np.abs(explainer.model.predict(X) -

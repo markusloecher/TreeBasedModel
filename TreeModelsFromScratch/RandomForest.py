@@ -5,6 +5,7 @@ from collections import Counter
 from warnings import warn, catch_warnings, simplefilter
 from sklearn.metrics import mean_squared_error, accuracy_score
 import numbers
+from shap.explainers._tree import SingleTree
 
 class RandomForest:
     def __init__(self,
@@ -142,20 +143,99 @@ class RandomForest:
         idxs_oob = mask.nonzero()
         return X_oob, y_oob, idxs_oob
 
-    def _most_common_label(self, y):
-        counter = Counter(y)
-        most_common = counter.most_common(1)[0][0]
-        return most_common
+    def predict_proba(self, X):
+
+        # If function is called on a regression tree return nothing
+        if self.treetype != "classification":
+            message = "This function is only available for classification tasks. This model is of type {}".format(
+                self.treetype)
+            warn(message)
+            return
+
+        if isinstance(X, pd.DataFrame):
+            X = X.values
+
+        predictions = np.array([tree.predict_proba(X) for tree in self.trees])
+        tree_preds = np.swapaxes(predictions, 0, 1)
+
+        predictions = np.array([np.mean(pred, axis=0) for pred in tree_preds])
+
+        return predictions
 
     def predict(self, X):
         if isinstance(X, pd.DataFrame):
             X = X.values
-        predictions = np.array([tree.predict(X) for tree in self.trees])
-        tree_preds = np.swapaxes(predictions, 0, 1)
 
-        if self.treetype=="classification":
-            predictions = np.array([self._most_common_label(pred) for pred in tree_preds])
-        elif self.treetype=="regression":
+        if self.treetype=="regression":
+            predictions = np.array([tree.predict(X) for tree in self.trees])
+            tree_preds = np.swapaxes(predictions, 0, 1)
             predictions = np.mean(tree_preds, axis=1)
+            return predictions
 
-        return predictions
+        elif self.treetype=="classification":
+            predictions = np.argmax(self.predict_proba(X),axis=1)
+            return predictions
+
+    def export_forest_for_SHAP(self):
+        tree_dicts = []
+        for tree in self.trees:
+
+            _, tree_dict = tree.export_tree_for_SHAP(return_tree_dict=True)
+
+            tree_dicts.append(tree_dict)
+
+        if self.treetype=="regression":
+            # model = {
+            #     "trees":[SingleTree(t, scaling=1.0 / len(tree_dicts)) for t in tree_dicts],
+            #     #"base_offset": scipy.special.logit(orig_model2.init_.class_prior_[1]),
+            #     "tree_output": "raw_value",
+            #     "scaling": 1.0 / len(tree_dicts),
+            #     "objective": "squared_error",
+            #     "input_dtype": np.
+            #     float32,  # this is what type the model uses the input feature data
+            #     "internal_dtype": np.
+            #     float64  # this is what type the model uses for values and thresholds
+            # }
+            model = [
+                SingleTree(t, scaling=1.0 / len(tree_dicts))
+                for t in tree_dicts
+            ]
+        elif self.treetype=="classification":
+            # model = {
+            #     #"trees": tree_dicts,
+            #     "trees":[SingleTree(t, scaling=1.0 / len(tree_dicts)) for t in tree_dicts],
+            #     #"base_offset":0.6274165202108963,  #scipy.special.logit(orig_model2.init_.class_prior_[1]),
+            #     "tree_output": "probability",
+            #     "scaling": 1.0/len(tree_dicts),
+            #     "objective": "binary_crossentropy",
+            #     "input_dtype": np.float32,  # this is what type the model uses the input feature data
+            #     "internal_dtype": np.float64  # this is what type the model uses for values and thresholds
+            # }
+            model = [
+                SingleTree(t, scaling=1.0 / len(tree_dicts), normalize=True)
+                for t in tree_dicts
+            ]
+        return model
+
+    def verify_shap_model(self, explainer, X):
+        '''Verify the integrity of SHAP explainer model by comparing output of export_tree_for_SHAP vs original model'''
+
+        if self.treetype == "classification":
+            # Make sure that the ingested SHAP model (a TreeEnsemble object) makes the same predictions as the original model
+            assert np.abs(
+                explainer.model.predict(X) -
+                self.predict_proba(X)[:, 1]).max() < 1e-4
+
+            # make sure the SHAP values sum up to the model output (this is the local accuracy property)
+            assert np.abs(explainer.expected_value +
+                          explainer.shap_values(X).sum(1) -
+                          self.predict_proba(X)[:, 1]).max() < 1e-4
+        else:
+            # Make sure that the ingested SHAP model (a TreeEnsemble object) makes the same predictions as the original model
+            assert np.abs(explainer.model.predict(X) -
+                          self.predict(X)).max() < 1e-4
+
+            # make sure the SHAP values sum up to the model output (this is the local accuracy property)
+            assert np.abs(explainer.expected_value +
+                          explainer.shap_values(X).sum(1) -
+                          self.predict(X)).max() < 1e-4

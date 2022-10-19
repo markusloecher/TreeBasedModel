@@ -161,10 +161,7 @@ class DecisionTree:
             return node
 
         # Random feature subsampling at each split point
-        if self.n_features is not None:
-            feat_idxs = self.random_state_.choice(n_feats, self.n_features, replace=False)
-        else:
-            feat_idxs = np.arange(n_feats)
+        feat_idxs = self.random_state_.choice(n_feats, self.n_features, replace=False)
 
         # find the best split
         best_feature, best_thresh, best_gain = self._best_split(X, y, feat_idxs)

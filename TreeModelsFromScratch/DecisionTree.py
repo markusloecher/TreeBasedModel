@@ -396,6 +396,50 @@ class DecisionTree:
                 self.n_nodes += 1
             yield (*p, node.id)
 
+
+    def traverse_explain_path(self, x, node=None, dict_list=None):
+        """Return taken decision path in the tree for the given sample and dict with detailed information about decision path"""
+        if dict_list is None:
+            dict_list = []
+
+        dict_node = {"node_id": node.id}
+
+        if node.is_leaf_node():
+
+            if self.treetype == "classification":
+                dict_node.update([("value", node.value),
+                                ("prob_distribution", node.clf_prob_dis)])
+                dict_list.append(dict_node)
+                return [dic.get("node_id") for dic in dict_list], dict_list
+            dict_node["value"] = node.value
+            dict_list.append(dict_node)
+            return [dic.get("node_id") for dic in dict_list], dict_list
+
+        dict_node.update([("feature", node.feature_name or node.feature),
+                        ("threshold", np.round(node.threshold, 3)),
+                        ("value_observation", x[node.feature].round(3))])
+
+        if x[node.feature] <= node.threshold:
+            dict_node["decision"] = "{} <= {} --> left".format(
+                x[node.feature].round(3), np.round(node.threshold, 3))
+            dict_list.append(dict_node)
+            return self.traverse_explain_path(x, node.left, dict_list)
+        dict_node["decision"] = "{} > {} --> right".format(
+            x[node.feature].round(3), np.round(node.threshold, 3))
+        dict_list.append(dict_node)
+        return self.traverse_explain_path(x, node.right, dict_list)
+
+
+    def explain_decision_path(self, X):
+        """Takes one ore more observations and explains the samples path along the tree and returns decision path and detailed information about path"""
+        if isinstance(X, pd.DataFrame):
+            X = X.values
+
+        if isinstance(X, pd.Series):
+            return np.array(self.traverse_explain_path(X, self.root))
+
+        return np.array([self.traverse_explain_path(x, self.root) for x in X])
+
     def _apply_hierarchical_srinkage(self, treetype):
 
         if treetype=="regression":

@@ -1,11 +1,13 @@
 from DecisionTree import DecisionTree
 import numpy as np
 import pandas as pd
-from collections import Counter
+#from collections import Counter
 from warnings import warn, catch_warnings, simplefilter
 from sklearn.metrics import mean_squared_error, accuracy_score
 import numbers
 from shap.explainers._tree import SingleTree
+from shap import TreeExplainer
+from SmoothShap import verify_shap_model
 
 class RandomForest:
     def __init__(self,
@@ -16,6 +18,7 @@ class RandomForest:
                  n_feature=None,
                  bootstrap=True,
                  oob=True,
+                 oob_SHAP=False,
                  criterion="gini",
                  treetype="classification",
                  HShrinkage=False,
@@ -29,6 +32,7 @@ class RandomForest:
         self.n_features=n_feature
         self.bootstrap=bootstrap
         self.oob = oob
+        self.oob_SHAP=oob_SHAP #for calculation of shap scores for oob predictions
         self.criterion = criterion
         self.k = k
         self.HShrinkage = HShrinkage
@@ -53,14 +57,25 @@ class RandomForest:
         if isinstance(X, pd.DataFrame):
             self.feature_names = X.columns
             X = X.values
+        if isinstance(y, pd.Series):
+            y = y.values
 
-        MAX_INT = np.iinfo(np.int32).max
+        if self.oob:
+            #empty list of lists to keep track of which tree predicted each oob observation (only for analyzing/debugging purposes)
+            self.oob_preds_tree_id = [
+                [] for _ in range(X.shape[0])
+            ]
+
+        if self.oob_SHAP:
+            #Create array filled with nans in shape [n_obs, n_feats, n_trees] for shap oob
+            shap_scores_oob = np.full([X.shape[0], X.shape[1], self.n_trees], np.nan)
 
         #Create random seeds for each tree in the forest
+        MAX_INT = np.iinfo(np.int32).max
         seed_list = self.random_state_.randint(MAX_INT, size=self.n_trees)
 
         #Create forest
-        for _, seed in zip(range(self.n_trees), seed_list):
+        for i, seed in zip(range(self.n_trees), seed_list):
             #for _ in range(self.n_trees):
 
             #Instantiate tree
@@ -94,9 +109,35 @@ class RandomForest:
 
                 tree.oob_preds[idxs_oob] = tree.predict(X_oob)
 
+                for j in idxs_oob:
+                    self.oob_preds_tree_id[j].append(i)
+
+                if self.oob_SHAP:
+
+                    #Create array with nan for single tree shap values which can be pasted in shap_scores_oob array
+                    shap_scores_oob_tree = np.full([X.shape[0], X.shape[1]], np.nan)
+
+                    #Create shap explainer for individual tree
+                    export_tree = tree.export_tree_for_SHAP()
+                    explainer_tree = TreeExplainer(export_tree)
+                    verify_shap_model(tree, explainer_tree, X_inbag)
+
+                    #Calculate shap scores for oob
+                    shap_tree_oob = explainer_tree.shap_values(X_oob)
+
+                    #Put shap oob scores in correct position of array (correct idx of observation)
+                    np.put_along_axis(shap_scores_oob_tree,
+                                      idxs_oob.reshape(idxs_oob.shape[0], 1),
+                                      shap_tree_oob,
+                                      axis=0)
+
+                    # Update values of overall shap_scores_oob array
+                    shap_scores_oob[:, :, i] = shap_scores_oob_tree.copy()
+
         # Calculate oob_score for all trees within forest
         if self.oob:
 
+            #surpress unnecessary np.nanmean error
             with catch_warnings():
                 simplefilter("ignore", category=RuntimeWarning)
 
@@ -122,10 +163,17 @@ class RandomForest:
 
             # calculate oob_score and store score as class attribute
             if self.treetype=="classification":
-                self.oob_preds_forest = self.oob_preds_forest.round(0) #round to full number 0 or 1
-                self.oob_score = accuracy_score(y_test_oob, self.oob_preds_forest) #accuracy
+                self.oob_preds_forest = self.oob_preds_forest
+                self.oob_score = accuracy_score(
+                    y_test_oob, self.oob_preds_forest.round(0))  #round to full number 0 or 1 for accuracy
             elif self.treetype=="regression":
                 self.oob_score = mean_squared_error(y_test_oob, self.oob_preds_forest, squared=False) #RMSE
+
+            if self.oob_SHAP:
+
+                self.oob_SHAP_scores = np.nanmean(shap_scores_oob, axis=2)
+
+
 
     def _bootstrap_samples(self, X, y, bootstrap, random_state):
 
@@ -141,7 +189,7 @@ class RandomForest:
         mask[idxs_inbag] = False
         X_oob = X[mask]
         y_oob = y[mask]
-        idxs_oob = mask.nonzero()
+        idxs_oob = mask.nonzero()[0]
         return X_oob, y_oob, idxs_oob
 
     def predict_proba(self, X):
@@ -218,25 +266,25 @@ class RandomForest:
             ]
         return model
 
-    def verify_shap_model(self, explainer, X):
-        '''Verify the integrity of SHAP explainer model by comparing output of export_tree_for_SHAP vs original model'''
+    # def verify_shap_model(self, explainer, X):
+    #     '''Verify the integrity of SHAP explainer model by comparing output of export_tree_for_SHAP vs original model'''
 
-        if self.treetype == "classification":
-            # Make sure that the ingested SHAP model (a TreeEnsemble object) makes the same predictions as the original model
-            assert np.abs(
-                explainer.model.predict(X) -
-                self.predict_proba(X)[:, 1]).max() < 1e-4
+    #     if self.treetype == "classification":
+    #         # Make sure that the ingested SHAP model (a TreeEnsemble object) makes the same predictions as the original model
+    #         assert np.abs(
+    #             explainer.model.predict(X) -
+    #             self.predict_proba(X)[:, 1]).max() < 1e-4
 
-            # make sure the SHAP values sum up to the model output (this is the local accuracy property)
-            assert np.abs(explainer.expected_value +
-                          explainer.shap_values(X).sum(1) -
-                          self.predict_proba(X)[:, 1]).max() < 1e-4
-        else:
-            # Make sure that the ingested SHAP model (a TreeEnsemble object) makes the same predictions as the original model
-            assert np.abs(explainer.model.predict(X) -
-                          self.predict(X)).max() < 1e-4
+    #         # make sure the SHAP values sum up to the model output (this is the local accuracy property)
+    #         assert np.abs(explainer.expected_value +
+    #                       explainer.shap_values(X).sum(1) -
+    #                       self.predict_proba(X)[:, 1]).max() < 1e-4
+    #     else:
+    #         # Make sure that the ingested SHAP model (a TreeEnsemble object) makes the same predictions as the original model
+    #         assert np.abs(explainer.model.predict(X) -
+    #                       self.predict(X)).max() < 1e-4
 
-            # make sure the SHAP values sum up to the model output (this is the local accuracy property)
-            assert np.abs(explainer.expected_value +
-                          explainer.shap_values(X).sum(1) -
-                          self.predict(X)).max() < 1e-4
+    #         # make sure the SHAP values sum up to the model output (this is the local accuracy property)
+    #         assert np.abs(explainer.expected_value +
+    #                       explainer.shap_values(X).sum(1) -
+    #                       self.predict(X)).max() < 1e-4

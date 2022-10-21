@@ -6,22 +6,9 @@ import numbers
 from warnings import warn, catch_warnings, simplefilter
 
 class Node:
-    def __init__(self,
-                 feature=None,
-                 feature_name=None,
-                 threshold=None,
-                 left=None,
-                 right=None,
-                 gain=None,
-                 id=None,
-                 depth=None,
-                 leaf_node=False,
-                 samples=None,
-                 gini=None,
-                 *,
-                 value=None,
-                 clf_value_dis=None,
-                 clf_prob_dis=None):
+    def __init__(self, feature=None, feature_name=None, threshold=None, left=None, right=None,
+                 gain=None, id=None, depth=None, leaf_node=False, samples=None, gini=None,
+                 value=None, clf_value_dis=None, clf_prob_dis=None):
         self.feature = feature
         self.feature_name = feature_name
         self.threshold = threshold
@@ -42,18 +29,8 @@ class Node:
 
 
 class DecisionTree:
-    def __init__(self,
-                 min_samples_split=2,
-                 min_samples_leaf=1,
-                 max_depth=None,
-                 n_features=None,
-                 criterion="gini",
-                 treetype="classification",
-                 k=None,
-                 feature_names=None,
-                 HShrinkage=False,
-                 HS_lambda=0,
-                 random_state=None):
+    def __init__(self, min_samples_split=2, min_samples_leaf=1, max_depth=None, n_features=None, criterion="gini",
+                 treetype="classification", k=None, feature_names=None, HShrinkage=False, HS_lambda=0, random_state=None):
         self.min_samples_split=min_samples_split
         self.min_samples_leaf = min_samples_leaf
         self.max_depth=max_depth
@@ -73,7 +50,8 @@ class DecisionTree:
         #else:
         #    self.random_state = np.random.default_rng(random_state)
         self.n_nodes=0
-        self.oob_preds=None #only for random forests
+        self.oob_preds=None #only relevant for random forests oob
+        self.oob_shap = None  #only relevant for random forests oob shap
 
     def _check_random_state(self, seed):
         if isinstance(seed, numbers.Integral) or (seed is None):
@@ -595,28 +573,28 @@ class DecisionTree:
             return model, tree_dict
         return model
 
-    def verify_shap_model(self, explainer, X):
-        '''Verify the integrity of SHAP explainer model by comparing output of export_tree_for_SHAP vs original model'''
+    # def verify_shap_model(self, explainer, X):
+    #     '''Verify the integrity of SHAP explainer model by comparing output of export_tree_for_SHAP vs original model'''
 
-        if self.treetype=="classification":
-            # Make sure that the ingested SHAP model (a TreeEnsemble object) makes the same predictions as the original model
-            assert np.abs(
-                explainer.model.predict(X) -
-                self.predict_proba(X)[:, 1]).max() < 1e-4
+    #     if self.treetype=="classification":
+    #         # Make sure that the ingested SHAP model (a TreeEnsemble object) makes the same predictions as the original model
+    #         assert np.abs(
+    #             explainer.model.predict(X) -
+    #             self.predict_proba(X)[:, 1]).max() < 1e-4
 
-            # make sure the SHAP values sum up to the model output (this is the local accuracy property)
-            assert np.abs(explainer.expected_value +
-                          explainer.shap_values(X).sum(1) -
-                          self.predict_proba(X)[:, 1]).max() < 1e-4
-        else:
-            # Make sure that the ingested SHAP model (a TreeEnsemble object) makes the same predictions as the original model
-            assert np.abs(explainer.model.predict(X) -
-                          self.predict(X)).max() < 1e-4
+    #         # make sure the SHAP values sum up to the model output (this is the local accuracy property)
+    #         assert np.abs(explainer.expected_value +
+    #                       explainer.shap_values(X).sum(1) -
+    #                       self.predict_proba(X)[:, 1]).max() < 1e-4
+    #     else:
+    #         # Make sure that the ingested SHAP model (a TreeEnsemble object) makes the same predictions as the original model
+    #         assert np.abs(explainer.model.predict(X) -
+    #                       self.predict(X)).max() < 1e-4
 
-            # make sure the SHAP values sum up to the model output (this is the local accuracy property)
-            assert np.abs(explainer.expected_value +
-                          explainer.shap_values(X).sum(1) -
-                          self.predict(X)).max() < 1e-4
+    #         # make sure the SHAP values sum up to the model output (this is the local accuracy property)
+    #         assert np.abs(explainer.expected_value +
+    #                       explainer.shap_values(X).sum(1) -
+    #                       self.predict(X)).max() < 1e-4
 
 #class ClassificationTree(DecisionTree):
 #

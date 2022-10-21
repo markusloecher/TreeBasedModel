@@ -171,7 +171,7 @@ class RandomForest:
 
             if self.oob_SHAP:
 
-                self.oob_SHAP_scores = np.nanmean(shap_scores_oob, axis=2)
+                self.oob_SHAP_values = np.nanmean(shap_scores_oob, axis=2)
 
 
 

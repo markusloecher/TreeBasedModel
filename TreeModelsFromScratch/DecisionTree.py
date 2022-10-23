@@ -270,7 +270,7 @@ class DecisionTree:
             g_l, g_r = self._gini(y[left_idxs]), self._gini(y[right_idxs])
             child_gini = (n_l/n) * g_l + (n_r/n) * g_r
 
-            # calculate the IG (weighted impurity) (rescaled gain)
+            # calculate the IG (weighted impurity decrease) (rescaled gain) ==MDI
             information_gain = (n / self.no_samples_total) * (parent_gini -child_gini)
 
         return information_gain

@@ -68,6 +68,7 @@ class RandomForest:
 
         if self.oob_SHAP:
             #Create array filled with nans in shape [n_obs, n_feats, n_trees] for shap oob
+            shap_scores_inbag = np.full([X.shape[0], X.shape[1], self.n_trees], np.nan)
             shap_scores_oob = np.full([X.shape[0], X.shape[1], self.n_trees], np.nan)
 
         #Create random seeds for each tree in the forest
@@ -115,6 +116,7 @@ class RandomForest:
                 if self.oob_SHAP:
 
                     #Create array with nan for single tree shap values which can be pasted in shap_scores_oob array
+                    shap_scores_inbag_tree = np.full([X.shape[0], X.shape[1]], np.nan)
                     shap_scores_oob_tree = np.full([X.shape[0], X.shape[1]], np.nan)
 
                     #Create shap explainer for individual tree
@@ -123,15 +125,21 @@ class RandomForest:
                     verify_shap_model(tree, explainer_tree, X_inbag)
 
                     #Calculate shap scores for oob
+                    shap_tree_inbag = explainer_tree.shap_values(X_inbag)
                     shap_tree_oob = explainer_tree.shap_values(X_oob)
 
                     #Put shap oob scores in correct position of array (correct idx of observation)
+                    np.put_along_axis(shap_scores_inbag_tree,
+                                      idxs_inbag.reshape(idxs_inbag.shape[0], 1),
+                                      shap_tree_inbag,
+                                      axis=0)
                     np.put_along_axis(shap_scores_oob_tree,
                                       idxs_oob.reshape(idxs_oob.shape[0], 1),
                                       shap_tree_oob,
                                       axis=0)
 
                     # Update values of overall shap_scores_oob array
+                    shap_scores_inbag[:, :, i] = shap_scores_inbag_tree.copy()
                     shap_scores_oob[:, :, i] = shap_scores_oob_tree.copy()
 
         # Calculate oob_score for all trees within forest
@@ -170,7 +178,7 @@ class RandomForest:
                 self.oob_score = mean_squared_error(y_test_oob, self.oob_preds_forest, squared=False) #RMSE
 
             if self.oob_SHAP:
-
+                self.inbag_SHAP_values = np.nanmean(shap_scores_inbag, axis=2)
                 self.oob_SHAP_values = np.nanmean(shap_scores_oob, axis=2)
 
 

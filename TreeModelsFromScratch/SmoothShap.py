@@ -65,5 +65,5 @@ def smooth_shap(shap_values_inbag, shap_values_oob, detailed_output=False):
     smooth_shap = np.mean(preds, axis=1)
 
     if detailed_output:
-        return smooth_shap, preds, lin_models
+        return smooth_shap, preds, lin_models, shap_values_inbag, shap_values_oob
     return smooth_shap

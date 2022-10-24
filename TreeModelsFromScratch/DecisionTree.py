@@ -213,6 +213,7 @@ class DecisionTree:
             X_column = X[:, feat_idx]
             thresholds = np.unique(X_column)
 
+            # if only one threshold / value exist in column
             if len(thresholds)==1:
                 gain = self._information_gain(y, X_column, thresholds[0])
 

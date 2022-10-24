@@ -4,6 +4,7 @@ from collections import Counter
 import copy
 import numbers
 from warnings import warn, catch_warnings, simplefilter
+import ipdb
 
 class Node:
     def __init__(self, feature=None, feature_name=None, threshold=None, left=None, right=None,
@@ -152,6 +153,7 @@ class DecisionTree:
 
         # split samples in left and right child
         left_idxs, right_idxs = self._split(X[:, best_feature], best_thresh)
+        #print(left_idxs, right_idxs)
 
         # If no of childs on one side is smaller than the parameter value: Create leaf
         if (len(left_idxs) < self.min_samples_leaf) or (
@@ -200,13 +202,24 @@ class DecisionTree:
 
         return node
 
+
+
     def _best_split(self, X, y, feat_idxs):
+
         best_gain = np.array([-1])
         split_idx, split_threshold = None, None
 
         for feat_idx in feat_idxs:
             X_column = X[:, feat_idx]
             thresholds = np.unique(X_column)
+
+            if len(thresholds)==1:
+                gain = self._information_gain(y, X_column, thresholds[0])
+
+                if gain > best_gain.max():
+                    best_gain = np.array([gain])
+                    split_idx = np.array([feat_idx])
+                    split_threshold = thresholds
 
             for index in range(1,len(thresholds)):
                 thr = (thresholds[index] + thresholds[index - 1]) / 2
@@ -220,10 +233,13 @@ class DecisionTree:
                 #                    split_threshold = thr
 
                 # if gain>best_gain --> replace gain, splitidx and thres
+
+
                 if gain > best_gain.max():
                     best_gain = np.array([gain])
                     split_idx = np.array([feat_idx])
                     split_threshold = np.array([thr])
+
 
                 # elif gain==best_gain --> create list and append
                 elif gain == best_gain.all():
@@ -231,8 +247,10 @@ class DecisionTree:
                     split_idx = np.append(split_idx, feat_idx)
                     split_threshold = np.append(split_threshold, thr)
 
+
         # Draw random gain/thres/feature from best splits
         idx_best = self.random_state_.choice(best_gain.shape[0], 1)[0]
+        #print(best_gain)
 
         return split_idx[idx_best], split_threshold[idx_best], best_gain[idx_best]
         #return split_idx, split_threshold, best_gain

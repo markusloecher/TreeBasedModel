@@ -109,7 +109,7 @@ class DecisionTree:
         depth_list = [len(i) for i in self.decision_paths]
         self.max_depth_ = max(depth_list)-1
 
-        #Set feature_importances_ (aka information_gain_scaled) as class attribute
+        #Set feature_importances_ (information_gain_scaled) as class attribute
         self._get_feature_importance(X)
 
 
@@ -117,7 +117,7 @@ class DecisionTree:
         n_samples, n_feats = X.shape
         n_labels = len(np.unique(y))
 
-        #Calculate leaf value
+        #Calculate node/leaf value
         if self.treetype == "classification":
             counter = Counter(y)
             clf_value_dis = [counter.get(0) or 0, counter.get(1) or 0]
@@ -572,6 +572,68 @@ class DecisionTree:
         if return_tree_dict:
             return model, tree_dict
         return model
+
+
+    def _reestimate_node_values(self, X, y):
+        """Re-calculate value for each node based on given samples"""
+
+        if isinstance(X, pd.DataFrame):
+            X = X.values
+        if isinstance(y, pd.Series):
+            y = y.values
+
+        # Get decision path (list of node ids) per observation
+        traversed_nodes = self.explain_decision_path(X)[:, 0].copy()
+
+        # Create array filled with nan to store y values for each node which is passed by the observation
+        y_vals_array = np.full((self.n_nodes, X.shape[0]), np.nan) #shape: (n_nodes, n_observations)
+
+        # Fill array
+        for i, (idxs, y) in enumerate(zip(traversed_nodes, y)):
+            y_vals_array[list(idxs),[i]] = y
+
+        # Dictonary to store results p node
+        result = {}
+
+        if self.treetype == "regression":
+
+            node_vals = np.nanmean(y_vals_array, axis=1)
+            n_samples = np.count_nonzero(~np.isnan(y_vals_array), axis=1)
+
+            for i in range(y_vals_array.shape[0]):
+
+                result[i]={"samples": n_samples[i],
+                        "value": node_vals[i]
+                    }
+
+            #for regression also return list of node values p. node
+            node_vals = np.nanmean(y_vals_array, axis=1)
+
+            return node_vals, result
+
+        elif self.treetype == "classification":
+
+            for i in range(y_vals_array.shape[0]):
+
+                val, cnts = np.unique(y_vals_array[i,:], return_counts=True)
+                counts = {k: v for k, v in zip(val, cnts)}
+
+                clf_value_dis = [counts.get(0) or 0, counts.get(1) or 0]
+                n_samples = np.sum(clf_value_dis)
+
+                clf_prob_dis = (np.array(clf_value_dis) / n_samples)
+                leaf_value = np.argmax(clf_prob_dis)
+
+                result[i]={"samples": n_samples,
+                        "value": leaf_value,
+                        "value_distribution": clf_value_dis,
+                        "prob_distribution": clf_prob_dis
+                    }
+
+            #for classification also return list of value probabilities p. node
+            node_prob = np.array([(1-val, val) for val in np.nanmean(y_vals_array, axis=1)])
+
+            return node_prob, result
 
     # def verify_shap_model(self, explainer, X):
     #     '''Verify the integrity of SHAP explainer model by comparing output of export_tree_for_SHAP vs original model'''

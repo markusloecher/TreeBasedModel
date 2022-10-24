@@ -253,7 +253,7 @@ class DecisionTree:
         left_idxs, right_idxs = self._split(X_column, threshold)
 
         if len(left_idxs) == 0 or len(right_idxs) == 0:
-            return 0
+            return 0 #if no samples are left in either the left or right child return 0
 
         # calculate the weighted avg. entropy/gini of children
         n = len(y)

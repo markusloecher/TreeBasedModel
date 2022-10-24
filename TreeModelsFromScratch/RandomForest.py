@@ -71,6 +71,9 @@ class RandomForest:
             shap_scores_inbag = np.full([X.shape[0], X.shape[1], self.n_trees], np.nan)
             shap_scores_oob = np.full([X.shape[0], X.shape[1], self.n_trees], np.nan)
 
+        #Empty array to store individual feature importances p. tree in the forest
+        feature_importance_trees = np.empty((self.n_trees, X.shape[1]))
+
         #Create random seeds for each tree in the forest
         MAX_INT = np.iinfo(np.int32).max
         seed_list = self.random_state_.randint(MAX_INT, size=self.n_trees)
@@ -99,6 +102,7 @@ class RandomForest:
             # Fit tree using inbag samples
             tree.fit(X_inbag, y_inbag)
             self.trees.append(tree) #Add tree to forest
+            feature_importance_trees[i, :] = tree.feature_importances_ #add feature importance to array
 
             # Draw oob samples (which have not been used for training) and predict oob observations
             if self.oob:
@@ -141,6 +145,9 @@ class RandomForest:
                     # Update values of overall shap_scores_oob array
                     shap_scores_inbag[:, :, i] = shap_scores_inbag_tree.copy()
                     shap_scores_oob[:, :, i] = shap_scores_oob_tree.copy()
+
+        # Calculate and set feature importance of forest as class attribute
+        self.feature_importances_ = feature_importance_trees.mean(axis=0)
 
         # Calculate oob_score for all trees within forest
         if self.oob:

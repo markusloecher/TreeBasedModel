@@ -348,7 +348,7 @@ class DecisionTree:
     def predict_proba(self, X):
 
         # If function is called on a regression tree return nothing
-        if self.treetype is not "classification":
+        if self.treetype != "classification":
             message = "This function is only available for classification tasks"
             warn(message)
             return

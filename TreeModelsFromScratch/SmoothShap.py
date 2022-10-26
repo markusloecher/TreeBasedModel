@@ -4,6 +4,10 @@ import pandas as pd
 from sklearn.linear_model import LinearRegression
 from sklearn.base import clone
 from warnings import warn, catch_warnings, simplefilter
+from copy import deepcopy
+from sklearn.metrics import roc_auc_score
+from sklearn.model_selection import KFold
+
 
 # Utility functions to verify SHAP model which has been created based on tree output
 def verify_shap_model(tree, explainer, X):
@@ -69,3 +73,25 @@ def smooth_shap(shap_values_inbag, shap_values_oob, detailed_output=False):
     if detailed_output:
         return smooth_shap_vals, mean_smooth_shap, lin_models, shap_values_inbag, shap_values_oob
     return smooth_shap_vals, mean_smooth_shap
+
+def cross_val_score_scratch(estimator, X, y, cv=10, scoring_func=roc_auc_score, shuffle=True, random_state=None):
+    '''Perform k-fold cross validation scoring for estimators with .fit and .predict function (imodels and scratch models)'''
+
+    kf = KFold(n_splits=cv, shuffle=shuffle, random_state=random_state)
+    scores = []
+
+    for train_index, test_index in kf.split(X):
+
+        # Create true copy of estimator (refitting of scratch models is not possbile)
+        estimator_copy = deepcopy(estimator)
+
+        #split data
+        X_train, X_test = X[train_index], X[test_index]
+        y_train, y_test = y[train_index], y[test_index]
+
+        #fit estimator, predict & score
+        estimator_copy.fit(X_train, y_train)
+        y_pred = estimator_copy.predict(X_test)
+        scores.append(scoring_func(y_test, y_pred))
+
+    return scores

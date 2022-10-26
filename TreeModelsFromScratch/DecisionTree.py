@@ -471,7 +471,8 @@ class DecisionTree:
 
             # Create deep copies of relevant attributes (otherwise original values will be overwritten)
             decision_paths = copy.deepcopy(self.decision_paths)
-            clf_prob_dist = np.stack(copy.deepcopy([node_id.clf_prob_dis for node_id in self.node_list]), axis=0 )
+            #clf_prob_dist = np.stack(copy.deepcopy([node_id.clf_prob_dis for node_id in self.node_list]), axis=0 )
+            clf_prob_dist = np.array(copy.deepcopy([node_id.clf_prob_dis for node_id in self.node_list]))
             node_samples = copy.deepcopy([node_id.samples for node_id in self.node_list])
 
             #Get empty array with no rows == no of nodes and 2 columns (for class 0 and class 1)

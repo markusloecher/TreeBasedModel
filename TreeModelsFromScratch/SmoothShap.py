@@ -7,6 +7,7 @@ from warnings import warn, catch_warnings, simplefilter
 from copy import deepcopy
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import KFold
+from shap.explainers._tree import SingleTree
 
 
 # Utility functions to verify SHAP model which has been created based on tree output

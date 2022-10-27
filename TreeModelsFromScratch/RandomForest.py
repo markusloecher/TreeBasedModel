@@ -15,7 +15,7 @@ class RandomForest:
                  max_depth=None,
                  min_samples_split=2,
                  min_samples_leaf=1,
-                 n_feature=None,
+                 n_feature="sqrt",
                  bootstrap=True,
                  oob=True,
                  oob_SHAP=False,

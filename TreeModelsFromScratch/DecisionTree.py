@@ -62,7 +62,14 @@ class DecisionTree:
             return seed
 
     def fit(self, X, y):
-        self.n_features = X.shape[1] if not self.n_features else min(X.shape[1],self.n_features)
+        #self.n_features = X.shape[1] if not self.n_features else min(X.shape[1], self.n_features)
+        if not self.n_features:
+            self.n_features = X.shape[1]
+        elif self.n_features=="sqrt":
+            self.n_features = int(np.rint(np.sqrt(X.shape[1]))) #square root of number of feats in X
+        else:
+            self.n_features = min(X.shape[1], self.n_features)
+
         self.features_in_ = range(X.shape[1])
         self.node_list = []
         self.node_id_dict = {}

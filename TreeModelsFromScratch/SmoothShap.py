@@ -95,3 +95,82 @@ def cross_val_score_scratch(estimator, X, y, cv=10, scoring_func=roc_auc_score, 
         scores.append(scoring_func(y_test, y_pred))
 
     return scores
+
+
+def export_imodels_for_SHAP(imodel, is_forest=True):
+    '''Exports imodel estimator in a shap readable format'''
+    if is_forest:
+
+        tree_dicts = []
+
+        for tree in imodel.estimator_.estimators_:
+
+            # extract the arrays that define the tree
+            children_left = tree.tree_.children_left
+            children_right = tree.tree_.children_right
+            children_default = children_right.copy(
+            )  # because sklearn does not use missing values
+            features = tree.tree_.feature
+            thresholds = tree.tree_.threshold
+            if str(type(imodel))[-12:-2] == "Classifier":
+                values = tree.tree_.value[:, :, 1]
+            else:
+                values = tree.tree_.value.reshape(tree.tree_.value.shape[0], 1)
+            node_sample_weight = tree.tree_.weighted_n_node_samples
+
+            # define a custom tree model
+            tree_dict = {
+                "children_left": children_left,
+                "children_right": children_right,
+                "children_default": children_default,
+                "features": features,
+                "thresholds": thresholds,
+                "values": values,
+                "node_sample_weight": node_sample_weight
+            }
+
+            tree_dicts.append(tree_dict)
+
+        if str(type(imodel))[-12:-2] == "Classifier":
+            model = [
+                SingleTree(t, scaling=1.0 / len(tree_dicts), normalize=True)
+                for t in tree_dicts
+            ]
+        else:
+            model = [
+                SingleTree(t, scaling=1.0 / len(tree_dicts))
+                for t in tree_dicts
+            ]
+
+        return model
+
+    # If single Tree model
+
+    # extract the arrays that define the tree
+    children_left = imodel.estimator_.tree_.children_left
+    children_right = imodel.estimator_.tree_.children_right
+    children_default = children_right.copy(
+    )  # because sklearn does not use missing values
+    features = imodel.estimator_.tree_.feature
+    thresholds = imodel.estimator_.tree_.threshold
+
+    if str(type(imodel))[-12:-2] == "Classifier":
+        values = imodel.estimator_.tree_.value[:, :, 1]
+    else:
+        values = imodel.estimator_.tree_.value.reshape(
+            imodel.estimator_.tree_.value.shape[0], 1)
+    node_sample_weight = imodel.estimator_.tree_.weighted_n_node_samples
+
+    # define a custom tree model
+    tree_dict = {
+        "children_left": children_left,
+        "children_right": children_right,
+        "children_default": children_default,
+        "features": features,
+        "thresholds": thresholds,
+        "values": values,
+        "node_sample_weight": node_sample_weight
+    }
+    model = {"trees": [tree_dict]}
+
+    return model

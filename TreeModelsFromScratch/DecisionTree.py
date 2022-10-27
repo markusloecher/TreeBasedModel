@@ -508,14 +508,14 @@ class DecisionTree:
 
     def _get_feature_importance(self, X):
 
-        feature_importance = np.zeros(X.shape[1])
-        features_list = [i.feature for i in self.node_list]
-        feat_imp_p_node = np.nan_to_num(
-            np.array([i.gain for i in self.node_list], dtype=float))
+        feature_importance = np.zeros(X.shape[1]) # empty array in shape of n. features
+        features_list = [i.feature for i in self.node_list] #feature per node (which was used to split)
+        feat_imp_p_node = np.nan_to_num(np.array([i.gain for i in self.node_list], dtype=float)) ##gain per node (if nan then convert to 0)
 
+        # for each node: add node.gain under feature_importance[feature_id]
         for feat_num, feat_imp in zip(features_list, feat_imp_p_node):
             if feat_num is not None:
-                feature_importance[feat_num] = feat_imp
+                feature_importance[feat_num] += feat_imp
 
         # Normalize information gain (total sum == 1)
         if np.sum(feature_importance)!=0:

@@ -8,6 +8,7 @@ from copy import deepcopy
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import KFold
 from shap.explainers._tree import SingleTree
+import itertools
 
 
 # Utility functions to verify SHAP model which has been created based on tree output
@@ -96,6 +97,66 @@ def cross_val_score_scratch(estimator, X, y, cv=10, scoring_func=roc_auc_score, 
         scores.append(scoring_func(y_test, y_pred))
 
     return scores
+
+def GridSearchCV_scratch(estimator, grid, X, y, cv=10, scoring_func=None, fit_best_est=True, shuffle=True, random_state=None):
+
+    valid_grid_keys = [
+        "reg_param", "n_trees", "HS_lambda", "max_depth", "min_samples_split",
+        "min_samples_leaf", "k", "n_features", "n_feature", "HShrinkage"
+    ]
+
+    # Check if keys are valid
+    for key in grid.keys():
+        if key not in valid_grid_keys:
+            message = """{} is not a valid hyperparameter for this function. Key has to be part of the following list
+            {}""".format(key, valid_grid_keys)
+            warn(message)
+            break
+
+    keys = list(grid.keys())
+
+    #Get all possible combinations of hyperparameters from grid
+    pos_combs = list(itertools.product(*grid.values()))
+
+    cv_scores = np.zeros((len(pos_combs), cv)) #array to store cv results
+
+    #iterrate over all possible combinations
+    for j, param_comb in enumerate(pos_combs):
+
+        # Create deep copy of estimator (necessary for scratch models)
+        estimator_copy = deepcopy(estimator)
+
+        #set attributes in param_comb
+        for i, key in enumerate(keys):
+            setattr(estimator_copy, key, param_comb[i])
+
+        # k fold cross validation
+        cv_scores[j,:] = cross_val_score_scratch(estimator_copy, X, y, cv=cv, scoring_func=scoring_func,
+                                            shuffle=shuffle, random_state=random_state)
+
+
+    # find best combination (highest avg. score accross all folds)
+    cv_scores_mean = cv_scores.mean(axis=1)
+    idx_best_comb = cv_scores_mean.argmax()
+
+    results = {
+        "best_param_comb": pos_combs[idx_best_comb],
+        "best_test_score": cv_scores_mean[idx_best_comb],
+        "mean_test_scores": cv_scores_mean,
+        "param_combinations": pos_combs,
+        "cv_scores_p_split": cv_scores
+    }
+
+    if fit_best_est is False:
+        return results
+
+    #fit estimator with best found combination
+    for i, key in enumerate(keys):
+        setattr(estimator, key, pos_combs[idx_best_comb][i])
+
+    estimator.fit(X, y) #original estimaotr will be fitted inplace does not need to be returned
+
+    return results
 
 
 def export_imodels_for_SHAP(imodel, is_forest=True):

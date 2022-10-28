@@ -2,8 +2,8 @@ import numpy as np
 import pandas as pd
 #import shap
 from sklearn.linear_model import LinearRegression
-from sklearn.base import clone
-from warnings import warn, catch_warnings, simplefilter
+#from sklearn.base import clone
+from warnings import warn#, catch_warnings, simplefilter
 from copy import deepcopy
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import KFold

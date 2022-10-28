@@ -600,9 +600,13 @@ class DecisionTree:
             return model, tree_dict
         return model
 
+    def _get_parent_node(self, node_id):
+        """Return parent node id for given node_id"""
+        return [node.id for node in self.node_list if (node.leaf_node==False) if ((node.left.id==node_id)|(node.right.id==node_id))][0]
 
     def _reestimate_node_values(self, X, y):
-        """Re-calculate value for each node based on given samples"""
+        """Re-calculate value for each node based on given samples and returns list of new node values, dict with n_samples and node_val,
+        and list of nan rows which were overwritten with new node values from parent node"""
 
         if isinstance(X, pd.DataFrame):
             X = X.values
@@ -618,6 +622,19 @@ class DecisionTree:
         # Fill array
         for i, (idxs, y) in enumerate(zip(traversed_nodes, y)):
             y_vals_array[list(idxs),[i]] = y
+
+        # get index of arrays which onl contain nan values (==node_id)
+        nan_rows = np.argwhere(np.isnan(y_vals_array).all(axis=1)).flatten()
+
+        # check if there are rows which only contain nan
+        if nan_rows.shape[0] != 0:
+
+            for nan_node_id in nan_rows:
+                # get parent node for these rows
+                par_node_id = self._get_parent_node(nan_node_id)
+
+                # copy row from parent node and paste it into this row (so they will end up with same mean)
+                y_vals_array[nan_node_id] = y_vals_array[par_node_id]
 
         # Dictonary to store results p node
         result = {}
@@ -636,7 +653,8 @@ class DecisionTree:
             #for regression also return list of node values p. node
             node_vals = np.nanmean(y_vals_array, axis=1)
 
-            return node_vals, result
+            return node_vals, result, nan_rows
+
 
         elif self.treetype == "classification":
 
@@ -660,7 +678,7 @@ class DecisionTree:
             #for classification also return list of value probabilities p. node
             node_prob = np.array([(1-val, val) for val in np.nanmean(y_vals_array, axis=1)])
 
-            return node_prob, result
+            return node_prob, result, nan_rows
 
     # def verify_shap_model(self, explainer, X):
     #     '''Verify the integrity of SHAP explainer model by comparing output of export_tree_for_SHAP vs original model'''

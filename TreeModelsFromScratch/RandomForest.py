@@ -45,7 +45,7 @@ class RandomForest:
         self.feature_names = None
 
     def _check_random_state(self, seed):
-        if isinstance(seed, numbers.Integral):
+        if isinstance(seed, numbers.Integral) or seed==None:
             return np.random.RandomState(seed)
             #return np.random.default_rng(seed)
         if isinstance(seed, np.random.RandomState):

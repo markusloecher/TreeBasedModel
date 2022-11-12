@@ -7,7 +7,7 @@ from sklearn.metrics import mean_squared_error, accuracy_score
 import numbers
 from shap.explainers._tree import SingleTree
 from shap import TreeExplainer
-from SmoothShap import verify_shap_model
+from SmoothShap import verify_shap_model, smooth_shap
 
 class RandomForest:
     def __init__(self,
@@ -281,25 +281,23 @@ class RandomForest:
             ]
         return model
 
-    # def verify_shap_model(self, explainer, X):
-    #     '''Verify the integrity of SHAP explainer model by comparing output of export_tree_for_SHAP vs original model'''
+    def apply_smSHAP_HS(self, HS_lambda=0):
+        '''Apply Selective HS using Smooth SHAP to a fitted RF instance. Overwrites values of fitted tree'''
 
-    #     if self.treetype == "classification":
-    #         # Make sure that the ingested SHAP model (a TreeEnsemble object) makes the same predictions as the original model
-    #         assert np.abs(
-    #             explainer.model.predict(X) -
-    #             self.predict_proba(X)[:, 1]).max() < 1e-4
+        #check if forest already used HS during training: if yes, return error
+        if self.trees[0].HS_applied==True:
+            message = "For the given model hierarchical shrinkage was already applied during fit! Please use an estimator whith HSShrinkage=False"
+            warn(message)
+            return
 
-    #         # make sure the SHAP values sum up to the model output (this is the local accuracy property)
-    #         assert np.abs(explainer.expected_value +
-    #                       explainer.shap_values(X).sum(1) -
-    #                       self.predict_proba(X)[:, 1]).max() < 1e-4
-    #     else:
-    #         # Make sure that the ingested SHAP model (a TreeEnsemble object) makes the same predictions as the original model
-    #         assert np.abs(explainer.model.predict(X) -
-    #                       self.predict(X)).max() < 1e-4
+        # Calculate Smooth SHAP scores
+        _, _, smSHAP_coefs = smooth_shap(self.inbag_SHAP_values, self.oob_SHAP_values)
 
-    #         # make sure the SHAP values sum up to the model output (this is the local accuracy property)
-    #         assert np.abs(explainer.expected_value +
-    #                       explainer.shap_values(X).sum(1) -
-    #                       self.predict(X)).max() < 1e-4
+        #For each tree in the forest apply HS with sm SHAP lin coef
+        for tree in self.trees:
+
+            tree.HS_lambda = HS_lambda #update attribute HS_lambda
+            tree._apply_hierarchical_srinkage(HS_lambda=HS_lambda, smSHAP_coefs=smSHAP_coefs) #apply HS with SmSHAP
+            tree._create_node_dict() # Update node dict attributes for each tree
+
+        self.smSHAP_coefs = smSHAP_coefs

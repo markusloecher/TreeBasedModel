@@ -53,6 +53,7 @@ class DecisionTree:
         self.n_nodes=0
         self.oob_preds=None #only relevant for random forests oob
         self.oob_shap = None  #only relevant for random forests oob shap
+        self.HS_applied = False # to store whether HS already was applied duing fit
 
     def _check_random_state(self, seed):
         if isinstance(seed, numbers.Integral) or (seed is None):
@@ -77,7 +78,7 @@ class DecisionTree:
 
         if isinstance(X, pd.DataFrame):
             self.feature_names = X.columns
-            self.features_in_ = X.columns
+            #self.features_in_ = X.columns
             X = X.values
         if isinstance(y, pd.Series):
             y = y.values
@@ -95,6 +96,19 @@ class DecisionTree:
             self._apply_hierarchical_srinkage(treetype=self.treetype)
 
         # Create dict of dict for all nodes with important attributes per node
+        self._create_node_dict()
+
+        #Set max tree depth as class attributes
+        depth_list = [len(i) for i in self.decision_paths]
+        self.max_depth_ = max(depth_list)-1
+
+        #Set feature_importances_ (information_gain_scaled) as class attribute
+        self._get_feature_importance(X)
+
+
+    def _create_node_dict(self):
+        '''Create dict of dict for all nodes with important attributes per node'''
+
         for node in self.node_list:
             self.node_id_dict[node.id] = {
                 "node": node,
@@ -112,14 +126,6 @@ class DecisionTree:
                     node.id]["value_distribution"] = node.clf_value_dis
                 self.node_id_dict[
                     node.id]["prob_distribution"] = list(node.clf_prob_dis)
-
-        #Set max tree depth as class attributes
-        depth_list = [len(i) for i in self.decision_paths]
-        self.max_depth_ = max(depth_list)-1
-
-        #Set feature_importances_ (information_gain_scaled) as class attribute
-        self._get_feature_importance(X)
-
 
     def _grow_tree(self, X, y, depth=0, feature_names=None):
         n_samples, n_feats = X.shape
@@ -443,7 +449,12 @@ class DecisionTree:
 
         return np.array([self.traverse_explain_path(x, self.root) for x in X])
 
-    def _apply_hierarchical_srinkage(self, treetype):
+    def _apply_hierarchical_srinkage(self, treetype=None, HS_lambda=None, smSHAP_coefs=None):
+
+        if treetype==None:
+            treetype = self.treetype
+        if HS_lambda==None:
+            HS_lambda = self.HS_lambda
 
         if treetype=="regression":
             node_values_HS = np.zeros(len(self.node_list))
@@ -464,9 +475,16 @@ class DecisionTree:
                     current_node = self.node_list[node_id]
                     node_id_parent = decision_path[l-1]
                     parent_node = self.node_list[node_id_parent]
+                    
+                    # Use Selective HS using Smooth SHAP if coefs are given and node is not a leaf (bc leaves do not have features)
+                    if (smSHAP_coefs!=None) & (current_node.leaf_node==False):
+                        cum_sum += ((current_node.value - parent_node.value) / (
+                            1 + HS_lambda/parent_node.samples)) * np.abs(smSHAP_coefs[current_node.feature])
 
-                    cum_sum += ((current_node.value - parent_node.value) / (
-                        1 + self.HS_lambda/parent_node.samples))
+                    # Use Orignal HS
+                    else:
+                        cum_sum += ((current_node.value - parent_node.value) / (
+                            1 + HS_lambda/parent_node.samples)) 
 
                     # Replace value of node with HS value outcome
                     node_values_HS[node_id] = cum_sum
@@ -500,9 +518,18 @@ class DecisionTree:
                         node_values_[node_id] = cum_sum
                         continue
 
+                    current_node = self.node_list[node_id]  
                     node_id_parent = decision_path[l - 1]
 
-                    cum_sum += ((clf_prob_dist[node_id]-clf_prob_dist[node_id_parent])/(1 + self.HS_lambda / node_samples[node_id_parent]))
+                    # Use Selective HS using Smooth SHAP
+                    if (smSHAP_coefs!=None) & (current_node.leaf_node==False):
+                        cum_sum += ((clf_prob_dist[node_id]-clf_prob_dist[node_id_parent])/
+                            (1 + HS_lambda / node_samples[node_id_parent])) * np.abs(smSHAP_coefs[current_node.feature])
+
+                    # Use Original HS
+                    else:
+                        cum_sum += ((clf_prob_dist[node_id]-clf_prob_dist[node_id_parent])/
+                            (1 + HS_lambda / node_samples[node_id_parent]))
 
                     node_values_[node_id] = cum_sum
                 for node_id in decision_path:
@@ -512,6 +539,9 @@ class DecisionTree:
             for node_id in range(len(self.node_list)):
                 self.node_list[node_id].clf_prob_dis = node_values_HS[node_id]
                 self.node_list[node_id].value = np.argmax(self.node_list[node_id].clf_prob_dis)
+
+        #set attribute to indicate that HS was applied
+        self.HS_applied = True
 
     def _get_feature_importance(self, X):
 

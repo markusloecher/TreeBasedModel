@@ -1,4 +1,4 @@
-from DecisionTree import DecisionTree
+from TreeModelsFromScratch.DecisionTree import DecisionTree
 import numpy as np
 import pandas as pd
 #from collections import Counter
@@ -7,7 +7,7 @@ from sklearn.metrics import mean_squared_error, accuracy_score
 import numbers
 from shap.explainers._tree import SingleTree
 from shap import TreeExplainer
-from SmoothShap import verify_shap_model, smooth_shap
+from TreeModelsFromScratch.SmoothShap import verify_shap_model, smooth_shap
 
 class RandomForest:
     def __init__(self,
@@ -23,6 +23,7 @@ class RandomForest:
                  treetype="classification",
                  HShrinkage=False,
                  HS_lambda=0,
+                 HS_smSHAP=False,
                  k=None,
                  random_state=None):
         self.n_trees = n_trees
@@ -37,12 +38,14 @@ class RandomForest:
         self.k = k
         self.HShrinkage = HShrinkage
         self.HS_lambda = HS_lambda
+        self.HS_smSHAP = HS_smSHAP # for smooth SHAP hierarchical shrinkage
         self.treetype = treetype
         self.random_state = random_state
         self.random_state_ = self._check_random_state(random_state)
         #self.random_state = np.random.default_rng(random_state)
         self.trees = []
         self.feature_names = None
+        self.smSHAP_HS_applied = False
 
     def _check_random_state(self, seed):
         if isinstance(seed, numbers.Integral) or seed==None:
@@ -187,7 +190,10 @@ class RandomForest:
             if self.oob_SHAP:
                 self.inbag_SHAP_values = np.nanmean(shap_scores_inbag, axis=2)
                 self.oob_SHAP_values = np.nanmean(shap_scores_oob, axis=2)
-
+                
+                # Apply Smooth SHAP HS 
+                if self.HS_smSHAP:
+                    self.apply_smSHAP_HS(HS_lambda=self.HS_lambda)
 
 
     def _bootstrap_samples(self, X, y, bootstrap, random_state):
@@ -282,16 +288,18 @@ class RandomForest:
         return model
 
     def apply_smSHAP_HS(self, HS_lambda=0):
-        '''Apply Selective HS using Smooth SHAP to a fitted RF instance. Overwrites values of fitted tree'''
+        '''Apply Selective HS using Smooth SHAP. Overwrites values of fitted tree. Can also be applied post hoc'''
 
         #check if forest already used HS during training: if yes, return error
-        if self.trees[0].HS_applied==True:
-            message = "For the given model hierarchical shrinkage was already applied during fit! Please use an estimator whith HSShrinkage=False"
+        if (self.trees[0].HS_applied==True) | (self.smSHAP_HS_applied==True):
+            message = "For the given model (selective) hierarchical shrinkage was already applied during fit! Please use an estimator with HSShrinkage=False & HS_smSHAP=False"
             warn(message)
             return
 
         # Calculate Smooth SHAP scores
-        _, _, smSHAP_coefs = smooth_shap(self.inbag_SHAP_values, self.oob_SHAP_values)
+        smSHAP_vals, _, smSHAP_coefs = smooth_shap(self.inbag_SHAP_values, self.oob_SHAP_values)
+        self.smSHAP_coefs = smSHAP_coefs
+        self.smSHAP_vals = smSHAP_vals 
 
         #For each tree in the forest apply HS with sm SHAP lin coef
         for tree in self.trees:
@@ -300,4 +308,5 @@ class RandomForest:
             tree._apply_hierarchical_srinkage(HS_lambda=HS_lambda, smSHAP_coefs=smSHAP_coefs) #apply HS with SmSHAP
             tree._create_node_dict() # Update node dict attributes for each tree
 
-        self.smSHAP_coefs = smSHAP_coefs
+        #set attribute to store that smSHAP HS wasused
+        self.smSHAP_HS_applied=True

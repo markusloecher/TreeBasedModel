@@ -91,8 +91,8 @@ def cross_val_score_scratch(estimator, X, y, cv=10, scoring_func=roc_auc_score, 
         estimator_copy = deepcopy(estimator)
 
         #split data
-        X_train, X_test = X[train_index], X[test_index]
-        y_train, y_test = y[train_index], y[test_index]
+        X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+        y_train, y_test = y.iloc[train_index], y.iloc[test_index]
 
         #fit estimator, predict & score
         estimator_copy.fit(X=X_train, y=y_train)

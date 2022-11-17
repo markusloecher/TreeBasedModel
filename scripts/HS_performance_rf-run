@@ -15,11 +15,14 @@ from TreeModelsFromScratch.datasets import DATASETS_CLASSIFICATION, DATASETS_REG
 from imodels.util.data_util import get_clean_dataset
 import os
 from datetime import datetime
+from multiprocessing import Pool
+from itertools import repeat
+
 
 # Add parser to change hyperparameters from command line 
 def simulation_options():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--DS_number", default=1, type=int, help='Number of dataset in DATASETS_CLASSIFICATION or DATASETS_REGRESSION ')
+    parser.add_argument("--DS_number", default=[1], type=int, nargs="+", help='List of numbers of dataset in DATASETS_CLASSIFICATION or DATASETS_REGRESSION ')
     parser.add_argument("--model_type", default="classification", type=str, help='model type (classification or regression')
     parser.add_argument("--n_trees_list", default=[15,25,50,100], nargs="+", type=int, help='Different number of trees to be tested')
     parser.add_argument("--n_features", default="sqrt", type=str, help='maximum number of features for feature subsampling (mtry)',)
@@ -126,20 +129,14 @@ def create_performance_plot_rf(X, y, model_type="classification", cv=10, scoring
 
     return data
 
-if __name__=="__main__":
+
+def run_performance_test(DS_number, opt, data_path, today_str):
     
-    #for storing results
-    data_path = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))),"data","HS_performance")
-    today_str = datetime.today().strftime("%Y%m%d")
-
-    # Get arguments from command line
-    opt = simulation_options()
-
     #Load dataset
     if opt.model_type =="classification":
-        dset_name, dset_file, data_source = DATASETS_CLASSIFICATION[opt.DS_number]
+        dset_name, dset_file, data_source = DATASETS_CLASSIFICATION[DS_number]
     else:
-        dset_name, dset_file, data_source = DATASETS_REGRESSION[opt.DS_number]
+        dset_name, dset_file, data_source = DATASETS_REGRESSION[DS_number]
     X, y, feat_names = get_clean_dataset(dset_file, data_source, DATASET_PATH)
 
     # Load scoring function
@@ -164,3 +161,47 @@ if __name__=="__main__":
         pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
     
     print(f"Data stored under : {data_path}/{today_str}_{dset_name}_results.pickle")
+
+
+if __name__=="__main__":
+    
+    #for storing results
+    data_path = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))),"data","HS_performance")
+    today_str = datetime.today().strftime("%Y%m%d")
+
+    # Get arguments from command line
+    opt = simulation_options()
+
+    # Parallelize script for all given datasets
+    pool= Pool(processes=len(opt.DS_number))
+    pool.starmap(run_performance_test, zip(opt.DS_number, repeat(opt), repeat(data_path), repeat(today_str)))
+
+    # #Load dataset
+    # if opt.model_type =="classification":
+    #     dset_name, dset_file, data_source = DATASETS_CLASSIFICATION[opt.DS_number]
+    # else:
+    #     dset_name, dset_file, data_source = DATASETS_REGRESSION[opt.DS_number]
+    # X, y, feat_names = get_clean_dataset(dset_file, data_source, DATASET_PATH)
+
+    # # Load scoring function
+    # scoring_func_dict = {
+    #     "roc_auc_score": roc_auc_score,
+    #     "r2_score": r2_score,
+    #     "accuracy_score": accuracy_score
+    # }
+
+    # # Run performance test
+    # data = create_performance_plot_rf(X, y, model_type=opt.model_type, cv=opt.cv, 
+    #         scoring_func=scoring_func_dict.get(opt.scoring_func), n_feature=opt.n_features,
+    #         n_trees = opt.n_trees_list, shuffle=True, random_state=opt.random_state, 
+    #         lambda_list=opt.lambda_list, dset_name=dset_name, savefig=True, data_path=data_path, 
+    #         today_str=today_str)
+
+    # # Add simulation parameters to result dict
+    # data["simulation_settings"]= opt
+
+    # # Store results as pickle file
+    # with open(f"{data_path}/{today_str}_{dset_name}_results.pickle", 'wb') as handle:
+    #     pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    
+    # print(f"Data stored under : {data_path}/{today_str}_{dset_name}_results.pickle")

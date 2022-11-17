@@ -149,6 +149,7 @@ def GridSearchCV_scratch(estimator, grid, X, y, cv=10, scoring_func=None, fit_be
     results = {
         "best_param_comb": pos_combs[idx_best_comb],
         "best_test_score": cv_scores_mean[idx_best_comb],
+        "best_test_scores": cv_scores[idx_best_comb],
         "mean_test_scores": cv_scores_mean,
         "param_combinations": pos_combs,
         "cv_scores_p_split": cv_scores

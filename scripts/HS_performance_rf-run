@@ -54,6 +54,7 @@ def create_performance_plot_rf(X, y, model_type="classification", cv=10, scoring
                                   n_feature=n_feature, oob=False)
         new_cv_res_scr.append(cross_val_score_scratch(forest_scr, X, y, cv=cv, scoring_func=scoring_func, 
                                                  shuffle=shuffle, random_state=random_state))
+        print("RF model trained")
 
         #scratchHS
         grid = {"HS_lambda":[0.1,1,5,10,20,50,100]}
@@ -63,6 +64,7 @@ def create_performance_plot_rf(X, y, model_type="classification", cv=10, scoring
                                                  shuffle=shuffle, random_state=random_state)
         grid_cv_resultsHS.append(grid_cv_resultHS)  
         new_cv_res_scrHS.append(grid_cv_resultHS["best_test_scores"])  
+        print("hsRF model trained")
 
         #scratchHS with smooth SHAP
         forest_scrHSsmSH = RandomForest(n_trees=n_tree, treetype=model_type, n_feature=n_feature, 
@@ -74,7 +76,8 @@ def create_performance_plot_rf(X, y, model_type="classification", cv=10, scoring
         grid_cv_result["smSHAP_coefs"] = forest_scrHSsmSH.smSHAP_coefs
         grid_cv_results.append(grid_cv_result)
         new_cv_res_scrHSsmSHAP.append(grid_cv_result["best_test_scores"])        
-        
+        print("hsRF smooth SHAP model trained")
+
     #Compute standard error of mean
     new_data_scr = np.array(new_cv_res_scr)
     new_sem_data_scr = np.std(new_data_scr, ddof=1, axis=1) / np.sqrt(np.size(new_data_scr, axis=1))
@@ -138,6 +141,7 @@ def run_performance_test(DS_number, opt, data_path, today_str):
     else:
         dset_name, dset_file, data_source = DATASETS_REGRESSION[DS_number]
     X, y, feat_names = get_clean_dataset(dset_file, data_source, DATASET_PATH)
+    print(f"{dset_name} loaded")
 
     # Load scoring function
     scoring_func_dict = {

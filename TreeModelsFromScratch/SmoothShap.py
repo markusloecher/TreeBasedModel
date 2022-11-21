@@ -110,7 +110,7 @@ def conf_int_ratio_two_var(pop_1, pop_2, alpha=0.05):
 
 
 
-def conf_int_cohens_d(pop_1, pop_2, reg_param=2, alpha=0.05, statistic="f"):
+def conf_int_cohens_d(pop_1, pop_2, reg_param=2, alpha=0.05, cohen_statistic="f"):
     '''Calculate shrinkage parameter based on confidence interval based on 2-sample difference in means'''
 
     # number of samples per population
@@ -133,9 +133,10 @@ def conf_int_cohens_d(pop_1, pop_2, reg_param=2, alpha=0.05, statistic="f"):
     eff_siz = np.sqrt((n1+n2)/(n1*n2)+(d**2/(2*(n1+n2))))
 
     # confidence interval
-    if statistic=="f":
+    if cohen_statistic=="f":
         conf_int = np.array([d-1.96*eff_siz, d+1.96*eff_siz])
-    elif statistic=="t":
+
+    elif cohen_statistic=="t":
         
         df_pooled = (n1+n2-2) # degrees of freedom pooled
         t_low = np.abs(st.t.ppf(q=(alpha/2), df=df_pooled))

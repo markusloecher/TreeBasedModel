@@ -449,7 +449,7 @@ class DecisionTree:
 
         return np.array([self.traverse_explain_path(x, self.root) for x in X])
 
-    def _apply_hierarchical_srinkage(self, treetype=None, HS_lambda=None, smSHAP_coefs=None):
+    def _apply_hierarchical_srinkage(self, treetype=None, HS_lambda=None, smSHAP_coefs=None, m_nodes=None):
 
         if treetype==None:
             treetype = self.treetype
@@ -476,10 +476,15 @@ class DecisionTree:
                     node_id_parent = decision_path[l-1]
                     parent_node = self.node_list[node_id_parent]
                     
-                    # Use Selective HS using Smooth SHAP if coefs are given
+                    # Use HS with Smooth SHAP if coefs are given
                     if (smSHAP_coefs!=None):
                         cum_sum += ((current_node.value - parent_node.value) / (
                             1 + HS_lambda/parent_node.samples)) * np.abs(smSHAP_coefs[parent_node.feature])
+
+                    # Use HS with nodewise smoothing if m_nodes are given
+                    elif (m_nodes!=None):
+                        cum_sum += ((current_node.value - parent_node.value) / (
+                            1 + HS_lambda/parent_node.samples)) * m_nodes[node_id]
 
                     # Use Orignal HS
                     else:
@@ -526,6 +531,11 @@ class DecisionTree:
                     if (smSHAP_coefs!=None):
                         cum_sum += ((clf_prob_dist[node_id]-clf_prob_dist[node_id_parent])/
                             (1 + HS_lambda / node_samples[node_id_parent])) * np.abs(smSHAP_coefs[parent_node.feature])
+
+                    # Use HS with nodewise smoothing if m_nodes are given
+                    elif (m_nodes!=None):
+                        cum_sum += ((clf_prob_dist[node_id]-clf_prob_dist[node_id_parent])/
+                            (1 + HS_lambda / node_samples[node_id_parent])) * m_nodes[node_id]
 
                     # Use Original HS
                     else:
@@ -684,7 +694,7 @@ class DecisionTree:
             #for regression also return list of node values p. node
             node_vals = np.nanmean(y_vals_array, axis=1)
 
-            return node_vals, result, nan_rows
+            return node_vals, result, nan_rows, y_vals_array
 
 
         elif self.treetype == "classification":
@@ -709,7 +719,7 @@ class DecisionTree:
             #for classification also return list of value probabilities p. node
             node_prob = np.array([(1-val, val) for val in np.nanmean(y_vals_array, axis=1)])
 
-            return node_prob, result, nan_rows
+            return node_prob, result, nan_rows, y_vals_array
 
     # def verify_shap_model(self, explainer, X):
     #     '''Verify the integrity of SHAP explainer model by comparing output of export_tree_for_SHAP vs original model'''

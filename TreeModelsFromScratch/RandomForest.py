@@ -7,7 +7,7 @@ from sklearn.metrics import mean_squared_error, accuracy_score
 import numbers
 from shap.explainers._tree import SingleTree
 from shap import TreeExplainer
-from TreeModelsFromScratch.SmoothShap import verify_shap_model, smooth_shap
+from TreeModelsFromScratch.SmoothShap import verify_shap_model, smooth_shap, conf_int_ratio_two_var, conf_int_cohens_d
 
 class RandomForest:
     def __init__(self,
@@ -24,6 +24,10 @@ class RandomForest:
                  HShrinkage=False,
                  HS_lambda=0,
                  HS_smSHAP=False,
+                 HS_nodewise_shrink_type=None,
+                 cohen_reg_param=2,
+                 alpha=0.05,
+                 cohen_statistic="f",
                  k=None,
                  random_state=None):
         self.n_trees = n_trees
@@ -39,6 +43,10 @@ class RandomForest:
         self.HShrinkage = HShrinkage
         self.HS_lambda = HS_lambda
         self.HS_smSHAP = HS_smSHAP # for smooth SHAP hierarchical shrinkage
+        self.HS_nodewise_shrink_type = HS_nodewise_shrink_type #For nodewise smoothing ("variance" or "effect_size")
+        self.cohen_reg_param = cohen_reg_param #For nodewise smoothing
+        self.alpha = alpha #For nodewise smoothing
+        self.cohen_statistic = cohen_statistic #For nodewise smoothing
         self.treetype = treetype
         self.random_state = random_state
         self.random_state_ = self._check_random_state(random_state)
@@ -46,6 +54,7 @@ class RandomForest:
         self.trees = []
         self.feature_names = None
         self.smSHAP_HS_applied = False
+        self.nodewise_HS_applied = False
 
     def _check_random_state(self, seed):
         if isinstance(seed, numbers.Integral) or seed==None:
@@ -120,6 +129,11 @@ class RandomForest:
                 for j in idxs_oob:
                     self.oob_preds_tree_id[j].append(i)
 
+                # Apply nodewise HS
+                if self.HS_nodewise_shrink_type != None:
+                    self.apply_nodewise_HS(tree, X_inbag, y_inbag, X_oob, y_oob, shrinkage_type=self.HS_nodewise_shrink_type, HS_lambda=self.HS_lambda, cohen_reg_param=self.cohen_reg_param, alpha=self.alpha, cohen_statistic=self.cohen_statistic)
+
+                # Compute inbag and oob SHAP values
                 if self.oob_SHAP:
 
                     #Create array with nan for single tree shap values which can be pasted in shap_scores_oob array
@@ -187,6 +201,11 @@ class RandomForest:
             elif self.treetype=="regression":
                 self.oob_score = mean_squared_error(y_test_oob, self.oob_preds_forest, squared=False) #RMSE
 
+            #set attribute to store that nodewise HS was used
+            if self.HS_nodewise_shrink_type != None:
+                self.nodewise_HS_applied = True
+
+            # Calculate average shap scores inbag and oob
             if self.oob_SHAP:
                 self.inbag_SHAP_values = np.nanmean(shap_scores_inbag, axis=2)
                 self.oob_SHAP_values = np.nanmean(shap_scores_oob, axis=2)
@@ -310,3 +329,56 @@ class RandomForest:
 
         #set attribute to store that smSHAP HS wasused
         self.smSHAP_HS_applied=True
+
+    def apply_nodewise_HS(self, tree, X_inbag, y_inbag, X_oob, y_oob, shrinkage_type="variance", HS_lambda=0, cohen_reg_param=2, alpha=0.05, cohen_statistic="f"):
+        '''Apply HS using smoothing coefficient based on discrepancies between inbag and oob data. Overwrites values of fitted tree. Can also be applied post hoc'''
+
+        #check if forest already used HS during training: if yes, return error
+        if (tree.HS_applied==True) | (self.nodewise_HS_applied==True):
+            message = "For the given model (selective) hierarchical shrinkage was already applied during fit! Please use an estimator with HSShrinkage=False & HS_nodewise=False"
+            warn(message)
+            return
+        
+        # Reestimate node values for inbag/oob smoothing
+        _, reest_node_vals_inbag, nan_rows_inbag, y_inbag_p_node = tree._reestimate_node_values(X_inbag, y_inbag)
+        _, reest_node_vals_oob, nan_rows_oob, y_oob_p_node = tree._reestimate_node_values(X_oob, y_oob)
+
+        # Variables to store results p node
+        conf_int_nodes = []
+        m_nodes = []
+
+        # For each node calculate shrinkage param
+        for i in range(tree.n_nodes):
+                
+            # Pass y_vals_inbag and oob to one of the conf int function
+            if shrinkage_type=="variance":
+                conf_int, m = conf_int_ratio_two_var(y_inbag_p_node[i,:][~np.isnan(y_inbag_p_node[i,:])], #filter out nans
+                                                        y_oob_p_node[i,:][~np.isnan(y_oob_p_node[i,:])], #filter out nans
+                                                        alpha=alpha)
+                conf_int_nodes.append(conf_int)
+                m_nodes.append(m)
+            elif shrinkage_type=="effect_size":
+                conf_int, m = conf_int_cohens_d(y_inbag_p_node[i,:][~np.isnan(y_inbag_p_node[i,:])], #filter out nans
+                                                    y_oob_p_node[i,:][~np.isnan(y_oob_p_node[i,:])], #filter out nans
+                                                    reg_param=cohen_reg_param, alpha=alpha, cohen_statistic=cohen_statistic)
+                conf_int_nodes.append(conf_int)
+                m_nodes.append(m)
+
+        # apply HS with smoothing m parameter
+        tree._apply_hierarchical_srinkage(HS_lambda=HS_lambda, m_nodes=m_nodes) #apply HS with nodewise HS
+        tree._create_node_dict() # Update node dict attributes for each tree
+
+        # store m_nodes, conf_interval_nodes and other parameter settings as class attribute
+        tree.nodewise_HS_dict = {"conf_intervals": conf_int_nodes,
+                                "m_values": m_nodes,
+                                "shrinkage_type":shrinkage_type,
+                                "alpha":alpha,
+                                "reest_node_vals_inbag":reest_node_vals_inbag, 
+                                "nan_rows_inbag":nan_rows_inbag,
+                                "reest_node_vals_oob":reest_node_vals_oob, 
+                                "nan_rows_oob":nan_rows_oob} 
+
+        # Add additional information for shrinkage type effect size to dict
+        if shrinkage_type=="effect_size":
+            tree.nodewise_HS_dict["cohen_reg_param"]=cohen_reg_param
+            tree.nodewise_HS_dict["cohen_statistic"]=cohen_statistic

@@ -9,6 +9,7 @@ from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import KFold
 from shap.explainers._tree import SingleTree
 import itertools
+import scipy.stats as st
 
 
 # Utility functions to verify SHAP model which has been created based on tree output
@@ -78,6 +79,78 @@ def smooth_shap(shap_values_inbag, shap_values_oob, detailed_output=False):
         return smooth_shap_vals, mean_smooth_shap, lin_coefs, lin_models, shap_values_inbag, shap_values_oob
     
     return smooth_shap_vals, mean_smooth_shap, lin_coefs
+
+
+def conf_int_ratio_two_var(pop_1, pop_2, alpha=0.05):
+    '''Calculate shrinkage parameter based on confidence interval based on 2-sample difference in variances'''
+
+    # number of samples per population
+    n1 = len(pop_1)
+    n2 = len(pop_2)
+
+    # variance if samples per population
+    var1 = np.var(pop_1)
+    var2 = np.var(pop_2)
+    var_rat = var1/var2
+
+    # F value for normal distribution  with alpha and degrees of freedom dfn and dfd
+    f_val_low = st.f.ppf(q=(alpha/2), dfn=n1-1, dfd=n2-2)
+    f_val_up = st.f.ppf(q=1-(alpha/2), dfn=n1-1, dfd=n2-2)
+
+    # confidence interval
+    conf_int = np.array([f_val_low*var_rat, f_val_up*var_rat])
+
+    # if upper CI < 1., then take CI upper, else take 1
+    if conf_int[1]<1.:
+        m = conf_int[1]
+    else:
+        m = 1.
+
+    return conf_int, m
+
+
+
+def conf_int_cohens_d(pop_1, pop_2, reg_param=2, alpha=0.05, statistic="f"):
+    '''Calculate shrinkage parameter based on confidence interval based on 2-sample difference in means'''
+
+    # number of samples per population
+    n1 = len(pop_1)
+    n2 = len(pop_2) 
+
+    # Mean of sample populations
+    mu1 = np.mean(pop_1)
+    mu2 = np.mean(pop_2)
+
+    # sample variances
+    var1 = np.var(pop_1)
+    var2 = np.var(pop_2)
+
+    var_pooled = ((n1-1)*var1+(n2-1)*var2)/(n1+n2-2)
+
+    # cohens d
+    d = (mu1-mu2)/np.sqrt(var_pooled)  
+    
+    eff_siz = np.sqrt((n1+n2)/(n1*n2)+(d**2/(2*(n1+n2))))
+
+    # confidence interval
+    if statistic=="f":
+        conf_int = np.array([d-1.96*eff_siz, d+1.96*eff_siz])
+    elif statistic=="t":
+        
+        df_pooled = (n1+n2-2) # degrees of freedom pooled
+        t_low = np.abs(st.t.ppf(q=(alpha/2), df=df_pooled))
+        t_up = np.abs(st.t.ppf(q=(1-alpha/2), df=df_pooled))
+
+        conf_int = np.array([d-t_low*eff_siz, d+t_up*eff_siz])
+
+    # smoothing parameter: if 0 within the range, take 0, else take min abs CI
+    if conf_int[0]<=0<=conf_int[1]:
+        m = (1+reg_param*0)**(-1) # ==1
+    else:
+        m = (1+reg_param*np.min(np.abs(conf_int)))**(-1)
+
+    return conf_int, m
+
 
 def cross_val_score_scratch(estimator, X, y, cv=10, scoring_func=roc_auc_score, shuffle=True, random_state=None):
     '''Perform k-fold cross validation scoring for estimators with .fit and .predict function (imodels and scratch models)'''

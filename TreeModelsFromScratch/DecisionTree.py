@@ -701,7 +701,7 @@ class DecisionTree:
 
             for i in range(y_vals_array.shape[0]):
 
-                val, cnts = np.unique(y_vals_array[i,:], return_counts=True)
+                val, cnts = np.unique(y_vals_array[i,:][~np.isnan(y_vals_array[i,:])], return_counts=True)
                 counts = {k: v for k, v in zip(val, cnts)}
 
                 clf_value_dis = [counts.get(0) or 0, counts.get(1) or 0]

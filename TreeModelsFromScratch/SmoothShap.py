@@ -183,7 +183,8 @@ def GridSearchCV_scratch(estimator, grid, X, y, cv=10, scoring_func=None, fit_be
 
     valid_grid_keys = [
         "reg_param", "n_trees", "HS_lambda", "max_depth", "min_samples_split",
-        "min_samples_leaf", "k", "n_features", "n_feature", "HShrinkage"
+        "min_samples_leaf", "k", "n_features", "n_feature", "HShrinkage", 
+        "cohen_reg_param", "cohen_statistic", "HS_nodewise_shrink_type"
     ]
 
     # Check if keys are valid

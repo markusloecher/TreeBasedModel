@@ -476,7 +476,7 @@ class DecisionTree:
                     node_id_parent = decision_path[l-1]
                     parent_node = self.node_list[node_id_parent]
                     
-                    # Use Selective HS using Smooth SHAP if coefs are given and node is not a leaf (bc leaves do not have features)
+                    # Use Selective HS using Smooth SHAP if coefs are given
                     if (smSHAP_coefs!=None):
                         cum_sum += ((current_node.value - parent_node.value) / (
                             1 + HS_lambda/parent_node.samples)) * np.abs(smSHAP_coefs[parent_node.feature])

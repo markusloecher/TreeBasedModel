@@ -520,11 +520,12 @@ class DecisionTree:
 
                     current_node = self.node_list[node_id]  
                     node_id_parent = decision_path[l - 1]
+                    parent_node = self.node_list[node_id_parent]
 
                     # Use Selective HS using Smooth SHAP
-                    if (smSHAP_coefs!=None) & (current_node.leaf_node==False):
+                    if (smSHAP_coefs!=None):
                         cum_sum += ((clf_prob_dist[node_id]-clf_prob_dist[node_id_parent])/
-                            (1 + HS_lambda / node_samples[node_id_parent])) * np.abs(smSHAP_coefs[current_node.feature])
+                            (1 + HS_lambda / node_samples[node_id_parent])) * np.abs(smSHAP_coefs[parent_node.feature])
 
                     # Use Original HS
                     else:

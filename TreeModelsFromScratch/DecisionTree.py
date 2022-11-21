@@ -648,7 +648,7 @@ class DecisionTree:
     def _reestimate_node_values(self, X, y):
         """Re-calculate value for each node based on given samples and returns list of new node values, dict with n_samples and node_val,
         and list of nan rows which were overwritten with new node values from parent node"""
-
+        import ipdb; ipdb.set_trace()
         if isinstance(X, pd.DataFrame):
             X = X.values
         if isinstance(y, pd.Series):

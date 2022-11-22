@@ -89,13 +89,13 @@ def conf_int_ratio_two_var(pop_1, pop_2, alpha=0.05):
     n2 = len(pop_2)
 
     # variance if samples per population
-    var1 = np.var(pop_1)
-    var2 = np.var(pop_2)
+    var1 = np.var(pop_1, ddof=1)
+    var2 = np.var(pop_2, ddof=1)
     var_rat = var1/var2
 
     # F value for normal distribution  with alpha and degrees of freedom dfn and dfd
-    f_val_low = st.f.ppf(q=(alpha/2), dfn=n1-1, dfd=n2-2)
-    f_val_up = st.f.ppf(q=1-(alpha/2), dfn=n1-1, dfd=n2-2)
+    f_val_low = st.f.ppf(q=(alpha/2), dfn=n1-1, dfd=n2-1)
+    f_val_up = st.f.ppf(q=1-(alpha/2), dfn=n1-1, dfd=n2-1)
 
     # confidence interval
     conf_int = np.array([f_val_low*var_rat, f_val_up*var_rat])
@@ -122,8 +122,8 @@ def conf_int_cohens_d(pop_1, pop_2, reg_param=2, alpha=0.05, cohen_statistic="f"
     mu2 = np.mean(pop_2)
 
     # sample variances
-    var1 = np.var(pop_1)
-    var2 = np.var(pop_2)
+    var1 = np.var(pop_1, ddof=1)
+    var2 = np.var(pop_2, ddof=1)
 
     var_pooled = ((n1-1)*var1+(n2-1)*var2)/(n1+n2-2)
 

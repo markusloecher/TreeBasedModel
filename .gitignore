@@ -13,3 +13,4 @@ data/**/*.gz
 *.obj
 *.pickle
 *.tsv.gz
+**/nohup.out

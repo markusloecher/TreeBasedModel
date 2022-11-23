@@ -42,4 +42,4 @@ DATASETS_REGRESSION = [
 
 ]
 
-DATASET_PATH = oj(dirname(dirname(os.path.realpath(__file__))), 'data')
+DATASET_PATH = oj(dirname(dirname(os.path.realpath(__file__))), 'raw_data')

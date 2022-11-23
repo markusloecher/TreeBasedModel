@@ -57,7 +57,7 @@ def create_performance_plot_rf(X, y, model_type="classification", cv=10, scoring
         print("RF model trained")
 
         #scratchHS
-        grid = {"HS_lambda":[0.1,1,5,10,20,50,100]}
+        grid = {"HS_lambda":lambda_list}
         forest_scrHS = RandomForest(n_trees=n_tree, treetype=model_type, n_feature=n_feature, 
                                     HShrinkage=True, random_state=random_state, oob=False)
         grid_cv_resultHS = GridSearchCV_scratch(forest_scrHS, grid, X, y, cv=cv, scoring_func=scoring_func, 
@@ -169,12 +169,12 @@ def run_performance_test(DS_number, opt, data_path, today_str):
 
 if __name__=="__main__":
     
-    #for storing results
-    data_path = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))),"data","HS_performance")
-    today_str = datetime.today().strftime("%Y%m%d")
-
     # Get arguments from command line
     opt = simulation_options()
+
+    #for storing results
+    data_path = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))),"data","HS_performance", opt.model_type)
+    today_str = datetime.today().strftime("%Y%m%d")
 
     # Parallelize script for all given datasets
     pool= Pool(processes=len(opt.DS_number))

@@ -7,7 +7,7 @@ from sklearn.metrics import mean_squared_error, accuracy_score
 import numbers
 from shap.explainers._tree import SingleTree
 from shap import TreeExplainer
-from TreeModelsFromScratch.SmoothShap import verify_shap_model, smooth_shap, conf_int_ratio_two_var, conf_int_cohens_d
+from TreeModelsFromScratch.SmoothShap import verify_shap_model, smooth_shap, conf_int_ratio_two_var, conf_int_cohens_d, conf_int_ratio_mse_ratio
 
 class RandomForest:
     def __init__(self,
@@ -43,7 +43,7 @@ class RandomForest:
         self.HShrinkage = HShrinkage
         self.HS_lambda = HS_lambda
         self.HS_smSHAP = HS_smSHAP # for smooth SHAP hierarchical shrinkage
-        self.HS_nodewise_shrink_type = HS_nodewise_shrink_type #For nodewise smoothing ("variance" or "effect_size")
+        self.HS_nodewise_shrink_type = HS_nodewise_shrink_type #For nodewise smoothing ("MSE_ratio" or "effect_size")
         self.cohen_reg_param = cohen_reg_param #For nodewise smoothing
         self.alpha = alpha #For nodewise smoothing
         self.cohen_statistic = cohen_statistic #For nodewise smoothing
@@ -330,7 +330,7 @@ class RandomForest:
         #set attribute to store that smSHAP HS wasused
         self.smSHAP_HS_applied=True
 
-    def apply_nodewise_HS(self, tree, X_inbag, y_inbag, X_oob, y_oob, shrinkage_type="variance", HS_lambda=0, cohen_reg_param=2, alpha=0.05, cohen_statistic="f"):
+    def apply_nodewise_HS(self, tree, X_inbag, y_inbag, X_oob, y_oob, shrinkage_type="MSE_ratio", HS_lambda=0, cohen_reg_param=2, alpha=0.05, cohen_statistic="f"):
         '''Apply HS using smoothing coefficient based on discrepancies between inbag and oob data. Overwrites values of fitted tree. Can also be applied post hoc'''
 
         #check if forest already used HS during training: if yes, return error
@@ -351,10 +351,10 @@ class RandomForest:
         for i in range(tree.n_nodes):
                 
             # Pass y_vals_inbag and oob to one of the conf int function
-            if shrinkage_type=="variance":
-                conf_int, m = conf_int_ratio_two_var(y_inbag_p_node[i,:][~np.isnan(y_inbag_p_node[i,:])], #filter out nans
+            if shrinkage_type=="MSE_ratio":
+                conf_int, m = conf_int_ratio_mse_ratio(y_inbag_p_node[i,:][~np.isnan(y_inbag_p_node[i,:])], #filter out nans
                                                         y_oob_p_node[i,:][~np.isnan(y_oob_p_node[i,:])], #filter out nans
-                                                        alpha=alpha)
+                                                        tree.node_list[i].value, alpha=alpha)
                 conf_int_nodes.append(conf_int)
                 m_nodes.append(m)
             elif shrinkage_type=="effect_size":

@@ -449,7 +449,7 @@ class DecisionTree:
 
         return np.array([self.traverse_explain_path(x, self.root) for x in X])
 
-    def _apply_hierarchical_srinkage(self, treetype=None, HS_lambda=None, smSHAP_coefs=None, m_nodes=None):
+    def _apply_hierarchical_srinkage(self, treetype=None, HS_lambda=None, smSHAP_coefs=None, m_nodes=None, testHS=False):
 
         if treetype==None:
             treetype = self.treetype
@@ -480,6 +480,11 @@ class DecisionTree:
                     if (smSHAP_coefs!=None):
                         cum_sum += ((current_node.value - parent_node.value) / (
                             1 + HS_lambda/parent_node.samples)) * np.abs(smSHAP_coefs[parent_node.feature])
+
+                    # test additional penalty of SmSHAP coef basedn on pct of samples in parent node of total samples
+                    elif (smSHAP_coefs!=None) & (testHS==True):
+                        cum_sum += ((current_node.value - parent_node.value) / (
+                            1 + HS_lambda/parent_node.samples)) * (1.-(parent_node.samples/self.node_list[0].samples))*np.abs(smSHAP_coefs[parent_node.feature])
 
                     # Use HS with nodewise smoothing if m_nodes are given
                     elif (m_nodes!=None):
@@ -531,6 +536,11 @@ class DecisionTree:
                     if (smSHAP_coefs!=None):
                         cum_sum += ((clf_prob_dist[node_id]-clf_prob_dist[node_id_parent])/
                             (1 + HS_lambda / node_samples[node_id_parent])) * np.abs(smSHAP_coefs[parent_node.feature])
+                    
+                    # test additional penalty of SmSHAP coef basedn on pct of samples in parent node of total samples
+                    elif (smSHAP_coefs!=None) & (testHS==True):
+                        cum_sum += ((clf_prob_dist[node_id]-clf_prob_dist[node_id_parent])/
+                            (1 + HS_lambda / node_samples[node_id_parent])) * (1.-(node_samples[node_id_parent]/node_samples[0]))*np.abs(smSHAP_coefs[parent_node.feature])
 
                     # Use HS with nodewise smoothing if m_nodes are given
                     elif (m_nodes!=None):

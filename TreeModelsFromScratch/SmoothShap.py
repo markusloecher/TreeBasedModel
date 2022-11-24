@@ -5,7 +5,7 @@ from sklearn.linear_model import LinearRegression
 #from sklearn.base import clone
 from warnings import warn#, catch_warnings, simplefilter
 from copy import deepcopy
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, mean_squared_error
 from sklearn.model_selection import KFold
 from shap.explainers._tree import SingleTree
 import itertools
@@ -99,6 +99,37 @@ def conf_int_ratio_two_var(pop_1, pop_2, alpha=0.05):
 
     # confidence interval
     conf_int = np.array([f_val_low*var_rat, f_val_up*var_rat])
+
+    # if upper CI < 1., then take CI upper, else take 1
+    if conf_int[1]<1.:
+        m = conf_int[1]
+    else:
+        m = 1.
+
+    return conf_int, m
+
+def conf_int_ratio_mse_ratio(pop_1, pop_2, node_val_inbag, type="regression", alpha=0.05):
+    '''Calculate shrinkage parameter based on confidence interval based on 2-sample difference in MSE'''
+
+    # number of samples per population
+    n1 = len(pop_1) #pop1 = y_true_inbag
+    n2 = len(pop_2) #pop2 = y_true_oob
+
+    #full array of node vals for MSE calc 
+    node_val_pop1 = np.full(pop_1.shape, node_val_inbag)
+    node_val_pop2 = np.full(pop_2.shape, node_val_inbag)
+
+    # MSE for OOB and Inbag
+    mse_inbag = mean_squared_error(node_val_pop1, pop_1)
+    mse_oob = mean_squared_error(node_val_pop2, pop_2)
+    mse_rat = mse_inbag/mse_oob
+
+    # F value for normal distribution  with alpha and degrees of freedom dfn and dfd
+    f_val_low = st.f.ppf(q=(alpha/2), dfn=n1-1, dfd=n2-1)
+    f_val_up = st.f.ppf(q=1-(alpha/2), dfn=n1-1, dfd=n2-1)
+
+    # confidence interval
+    conf_int = np.array([f_val_low*mse_rat, f_val_up*mse_rat])
 
     # if upper CI < 1., then take CI upper, else take 1
     if conf_int[1]<1.:

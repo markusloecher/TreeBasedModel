@@ -12,5 +12,5 @@ setup(name='SelectiveHierarchicalShrinkage',
       install_requires=requirements,
       # include_package_data: to install data from MANIFEST.in
       include_package_data=True,
-      scripts=['scripts/HS_performance_rf-run'],
+      scripts=['scripts/HS_performance_rf-run', 'scripts/HS_performance_HSnodewise'],
       zip_safe=False)

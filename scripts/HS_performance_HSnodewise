@@ -1,0 +1,216 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+# Imports
+import argparse
+from sklearn.metrics import roc_auc_score, r2_score, accuracy_score
+from tqdm import tqdm
+from TreeModelsFromScratch.RandomForest import RandomForest
+from TreeModelsFromScratch.SmoothShap import cross_val_score_scratch, GridSearchCV_scratch
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import pickle
+from TreeModelsFromScratch.datasets import DATASETS_CLASSIFICATION, DATASETS_REGRESSION, DATASET_PATH
+from imodels.util.data_util import get_clean_dataset
+import os
+from datetime import datetime
+from multiprocessing import Pool
+from itertools import repeat
+import warnings
+
+
+# Add parser to change hyperparameters from command line 
+def simulation_options():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--DS_number", default=[1], type=int, nargs="+", help='List of numbers of dataset in DATASETS_CLASSIFICATION or DATASETS_REGRESSION ')
+    parser.add_argument("--model_type", default="classification", type=str, help='model type (classification or regression')
+    parser.add_argument("--n_trees_list", default=[15,25,50,100], nargs="+", type=int, help='Different number of trees to be tested')
+    parser.add_argument("--n_features", default="sqrt", type=str, help='maximum number of features for feature subsampling (mtry)',)
+    parser.add_argument("--max_depth", default=None, type=int, help='maximum depth')
+    parser.add_argument("--lambda_list", default=[0.1,1,5,10,20,50,100], nargs="+", type=int, help='List of lambdas to test during gridsearch')
+    parser.add_argument("--cv", default=10, type=int, help='number of folds')
+    parser.add_argument("--scoring_func", default="roc_auc_score", type=str, help='scoring function')
+    parser.add_argument("--random_state", default=None, type=int, help='random state seed')
+    parser.add_argument("--HS_nodewise_shrink_type", default=None, type=str, help='If nodewiseshrinkage should be applied. Value: MSE_ratio')
+    opt = parser.parse_args()
+    return opt
+
+def create_performance_plot_rf(X, y, model_type="classification", cv=10, scoring_func=roc_auc_score, n_feature="sqrt",
+                                n_trees = [15,25,50,100], shuffle=True, random_state=42, dset_name=None, savefig=True, 
+                                lambda_list = [0.1,1,5,10,20,50,100], HS_nodewise_shrink_type=None,
+                                data_path=os.path.join(os.path.dirname(os.getcwd()),"data","HS_performance"), 
+                                today_str=datetime.today().strftime("%Y%m%d")):
+    '''Run performance test for RF scratch models, with HS and HS with nodewise MSE on datasets used in original HS paper'''
+
+    # For storing results
+    new_cv_res_scr = []
+    new_cv_res_scrHS = []
+    new_cv_res_scrHSnodeMSE = []
+    grid_cv_resultsHS = []
+    grid_cv_results = []
+    
+    for n_tree in tqdm(n_trees):
+
+        #scratch
+        forest_scr = RandomForest(n_trees=n_tree, treetype=model_type, random_state=random_state, 
+                                  n_feature=n_feature, oob=False)
+        new_cv_res_scr.append(cross_val_score_scratch(forest_scr, X, y, cv=cv, scoring_func=scoring_func, 
+                                                 shuffle=shuffle, random_state=random_state))
+        print("RF model trained")
+
+        #scratchHS
+        grid = {"HS_lambda":lambda_list}
+        forest_scrHS = RandomForest(n_trees=n_tree, treetype=model_type, n_feature=n_feature, 
+                                    HShrinkage=True, random_state=random_state, oob=False)
+        grid_cv_resultHS = GridSearchCV_scratch(forest_scrHS, grid, X, y, cv=cv, scoring_func=scoring_func, 
+                                                 shuffle=shuffle, random_state=random_state)
+        grid_cv_resultsHS.append(grid_cv_resultHS)  
+        new_cv_res_scrHS.append(grid_cv_resultHS["best_test_scores"])  
+        print("hsRF model trained")
+
+        #scratchHS with nodewise MSE smoothing
+        forest_scrHSnodeMSE = RandomForest(n_trees=n_tree, treetype=model_type, n_feature=n_feature, 
+                                    HShrinkage=False, random_state=random_state, oob=True, 
+                                    HS_nodewise_shrink_type=HS_nodewise_shrink_type)
+        grid_cv_result = GridSearchCV_scratch(forest_scrHSnodeMSE, grid, X, y, cv=cv, scoring_func=scoring_func, 
+                                                 shuffle=shuffle, random_state=random_state)
+        grid_cv_results.append(grid_cv_result)
+        new_cv_res_scrHSnodeMSE.append(grid_cv_result["best_test_scores"])        
+        print("hsRF nodewise MSE model trained")
+
+    #Compute standard error of mean
+    new_data_scr = np.array(new_cv_res_scr)
+    new_sem_data_scr = np.std(new_data_scr, ddof=1, axis=1) / np.sqrt(np.size(new_data_scr, axis=1))
+
+    new_data_scrHS = np.array(new_cv_res_scrHS)
+    new_sem_data_scrHS = np.std(new_data_scrHS, ddof=1, axis=1) / np.sqrt(np.size(new_data_scrHS, axis=1))
+
+    new_data_scrHSnodeMSE = np.array(new_cv_res_scrHSnodeMSE)
+    new_sem_data_scrHSnodeMSE = np.std(new_cv_res_scrHSnodeMSE, ddof=1, axis=1) / np.sqrt(np.size(new_cv_res_scrHSnodeMSE, axis=1))
+    
+    #Create plot
+    fig, axs = plt.subplots(1,2, figsize=(15,5))
+    
+    axs[0].errorbar(x=n_trees, y=np.array(new_data_scr).mean(axis=1), yerr=new_sem_data_scr, color="orange", 
+                alpha=.5, linewidth=3, marker="o")
+    axs[0].errorbar(x=n_trees, y=np.array(new_data_scrHS).mean(axis=1), yerr=new_sem_data_scrHS, color="tab:blue", 
+                   alpha=.5, linewidth=3, marker="o")
+    axs[0].errorbar(x=n_trees, y=np.array(new_data_scrHSnodeMSE).mean(axis=1), yerr=new_sem_data_scrHSnodeMSE, color="green", 
+                alpha=.5, linewidth=3, marker="o")
+
+    axs[0].set_title(f"{dset_name} (n = {X.shape[0]}, p = {X.shape[1]})")
+    axs[0].set_xlabel("Number of Trees")
+    y_label = "AUC" if str(scoring_func).split()[1]=="roc_auc_score" else "R2"
+    axs[0].set_ylabel(y_label)
+    axs[0].legend(["RF scratch", "hsRF scratch CV", "hsRF nodewise MSE scratch CV"])
+    axs[-1].axis('off')
+
+    if savefig:
+        filename = f"{data_path}/{today_str}_{dset_name}_plot.png"
+        fig.savefig(filename)
+        print("Image stored under :", filename)
+    
+    data = {
+        "results_scratch_RF":
+            {
+                "data": new_data_scr,
+                "sem": new_sem_data_scr
+            },
+        "results_scratch_hsRF":
+            {
+                "data": new_data_scrHS,
+                "sem": new_sem_data_scrHS,
+                "grid_cv_results":grid_cv_resultsHS
+            },
+        "results_scratch_hsRF_nodeMSE":
+            {
+                "data": new_data_scrHSnodeMSE,
+                "sem": new_sem_data_scrHSnodeMSE,
+                "grid_cv_results":grid_cv_results
+            }
+        }
+
+    return data
+
+
+def run_performance_test(DS_number, opt, data_path, today_str):
+    
+    #Load dataset
+    if opt.model_type =="classification":
+        dset_name, dset_file, data_source = DATASETS_CLASSIFICATION[DS_number]
+    else:
+        dset_name, dset_file, data_source = DATASETS_REGRESSION[DS_number]
+    X, y, feat_names = get_clean_dataset(dset_file, data_source, DATASET_PATH)
+    print(f"{dset_name} loaded")
+
+    # Load scoring function
+    scoring_func_dict = {
+        "roc_auc_score": roc_auc_score,
+        "r2_score": r2_score,
+        "accuracy_score": accuracy_score
+    }
+
+    # Run performance test
+    data = create_performance_plot_rf(X, y, model_type=opt.model_type, cv=opt.cv, 
+            scoring_func=scoring_func_dict.get(opt.scoring_func), n_feature=opt.n_features,
+            n_trees = opt.n_trees_list, shuffle=True, random_state=opt.random_state, 
+            HS_nodewise_shrink_type=opt.HS_nodewise_shrink_type,
+            lambda_list=opt.lambda_list, dset_name=dset_name, savefig=True, data_path=data_path, 
+            today_str=today_str)
+
+    # Add simulation parameters to result dict
+    data["simulation_settings"]= opt
+
+    # Store results as pickle file
+    with open(f"{data_path}/{today_str}_{dset_name}_results.pickle", 'wb') as handle:
+        pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    
+    print(f"Data stored under : {data_path}/{today_str}_{dset_name}_results.pickle")
+
+
+if __name__=="__main__":
+
+    # ignore warnings regarding nested arrays
+    warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning) 
+    
+    # Get arguments from command line
+    opt = simulation_options()
+
+    #for storing results
+    data_path = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))),"data","HS_performance", opt.model_type)
+    today_str = datetime.today().strftime("%Y%m%d")
+
+    # Parallelize script for all given datasets
+    pool= Pool(processes=len(opt.DS_number))
+    pool.starmap(run_performance_test, zip(opt.DS_number, repeat(opt), repeat(data_path), repeat(today_str)))
+
+    # #Load dataset
+    # if opt.model_type =="classification":
+    #     dset_name, dset_file, data_source = DATASETS_CLASSIFICATION[opt.DS_number]
+    # else:
+    #     dset_name, dset_file, data_source = DATASETS_REGRESSION[opt.DS_number]
+    # X, y, feat_names = get_clean_dataset(dset_file, data_source, DATASET_PATH)
+
+    # # Load scoring function
+    # scoring_func_dict = {
+    #     "roc_auc_score": roc_auc_score,
+    #     "r2_score": r2_score,
+    #     "accuracy_score": accuracy_score
+    # }
+
+    # # Run performance test
+    # data = create_performance_plot_rf(X, y, model_type=opt.model_type, cv=opt.cv, 
+    #         scoring_func=scoring_func_dict.get(opt.scoring_func), n_feature=opt.n_features,
+    #         n_trees = opt.n_trees_list, shuffle=True, random_state=opt.random_state, 
+    #         lambda_list=opt.lambda_list, dset_name=dset_name, savefig=True, data_path=data_path, 
+    #         today_str=today_str)
+
+    # # Add simulation parameters to result dict
+    # data["simulation_settings"]= opt
+
+    # # Store results as pickle file
+    # with open(f"{data_path}/{today_str}_{dset_name}_results.pickle", 'wb') as handle:
+    #     pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    
+    # print(f"Data stored under : {data_path}/{today_str}_{dset_name}_results.pickle")

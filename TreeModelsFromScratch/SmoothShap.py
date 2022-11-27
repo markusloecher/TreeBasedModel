@@ -9,6 +9,7 @@ from sklearn.metrics import roc_auc_score, mean_squared_error
 from sklearn.model_selection import KFold
 from shap.explainers._tree import SingleTree
 import itertools
+from tqdm import tqdm
 import scipy.stats as st
 
 
@@ -210,7 +211,7 @@ def cross_val_score_scratch(estimator, X, y, cv=10, scoring_func=roc_auc_score, 
 
     return scores
 
-def GridSearchCV_scratch(estimator, grid, X, y, cv=10, scoring_func=None, fit_best_est=True, shuffle=True, random_state=None):
+def GridSearchCV_scratch(estimator, grid, X, y, cv=10, scoring_func=None, fit_best_est=True, shuffle=True, pbar=False, random_state=None):
 
     valid_grid_keys = [
         "reg_param", "n_trees", "HS_lambda", "max_depth", "min_samples_split",
@@ -228,9 +229,13 @@ def GridSearchCV_scratch(estimator, grid, X, y, cv=10, scoring_func=None, fit_be
 
     keys = list(grid.keys())
 
-    #Get all possible combinations of hyperparameters from grid
-    pos_combs = list(itertools.product(*grid.values()))
-
+    
+    # If to show for each split progress bar
+    if pbar:
+        pos_combs = tqdm(list(itertools.product(*grid.values()))) #Get all possible combinations of hyperparameters from grid
+    else:
+        pos_combs = list(itertools.product(*grid.values())) #Get all possible combinations of hyperparameters from grid
+    
     cv_scores = np.zeros((len(pos_combs), cv)) #array to store cv results
 
     #iterrate over all possible combinations

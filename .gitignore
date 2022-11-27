@@ -14,3 +14,4 @@ data/**/*.gz
 *.pickle
 *.tsv.gz
 **/nohup.out
+*.pdf

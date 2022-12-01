@@ -209,8 +209,8 @@ class RandomForest:
             if self.oob_SHAP:
                 self.inbag_SHAP_values = np.nanmean(shap_scores_inbag, axis=2)
                 self.oob_SHAP_values = np.nanmean(shap_scores_oob, axis=2)
-                
-                # Apply Smooth SHAP HS 
+
+                # Apply Smooth SHAP HS
                 if self.HS_smSHAP:
                     self.apply_smSHAP_HS(HS_lambda=self.HS_lambda)
 
@@ -318,7 +318,7 @@ class RandomForest:
         # Calculate Smooth SHAP scores
         smSHAP_vals, _, smSHAP_coefs = smooth_shap(self.inbag_SHAP_values, self.oob_SHAP_values)
         self.smSHAP_coefs = smSHAP_coefs
-        self.smSHAP_vals = smSHAP_vals 
+        self.smSHAP_vals = smSHAP_vals
 
         #For each tree in the forest apply HS with sm SHAP lin coef
         for tree in self.trees:
@@ -338,7 +338,7 @@ class RandomForest:
             message = "For the given model (selective) hierarchical shrinkage was already applied during fit! Please use an estimator with HSShrinkage=False & HS_nodewise=False"
             warn(message)
             return
-        
+
         # Reestimate node values for inbag/oob smoothing
         _, reest_node_vals_inbag, nan_rows_inbag, y_inbag_p_node = tree._reestimate_node_values(X_inbag, y_inbag)
         _, reest_node_vals_oob, nan_rows_oob, y_oob_p_node = tree._reestimate_node_values(X_oob, y_oob)
@@ -349,7 +349,7 @@ class RandomForest:
 
         # For each node calculate shrinkage param
         for i in range(tree.n_nodes):
-                
+
             # Pass y_vals_inbag and oob to one of the conf int function
             if shrinkage_type=="MSE_ratio":
                 conf_int, m = conf_int_ratio_mse_ratio(y_inbag_p_node[i,:][~np.isnan(y_inbag_p_node[i,:])], #filter out nans
@@ -373,10 +373,10 @@ class RandomForest:
                                 "m_values": m_nodes,
                                 "shrinkage_type":shrinkage_type,
                                 "alpha":alpha,
-                                "reest_node_vals_inbag":reest_node_vals_inbag, 
+                                "reest_node_vals_inbag":reest_node_vals_inbag,
                                 "nan_rows_inbag":nan_rows_inbag,
-                                "reest_node_vals_oob":reest_node_vals_oob, 
-                                "nan_rows_oob":nan_rows_oob} 
+                                "reest_node_vals_oob":reest_node_vals_oob,
+                                "nan_rows_oob":nan_rows_oob}
 
         # Add additional information for shrinkage type effect size to dict
         if shrinkage_type=="effect_size":

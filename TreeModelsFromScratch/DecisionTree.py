@@ -445,9 +445,9 @@ class DecisionTree:
             X = X.values
 
         if isinstance(X, pd.Series):
-            return np.array(self.traverse_explain_path(X, self.root))
+            return np.array(self.traverse_explain_path(X, self.root), dtype="object")
 
-        return np.array([self.traverse_explain_path(x, self.root) for x in X])
+        return np.array([self.traverse_explain_path(x, self.root) for x in X], dtype="object")
 
     def _apply_hierarchical_srinkage(self, treetype=None, HS_lambda=None, smSHAP_coefs=None, m_nodes=None, testHS=False):
 
@@ -475,7 +475,7 @@ class DecisionTree:
                     current_node = self.node_list[node_id]
                     node_id_parent = decision_path[l-1]
                     parent_node = self.node_list[node_id_parent]
-                    
+
                     # Use HS with Smooth SHAP if coefs are given
                     if (smSHAP_coefs!=None):
                         cum_sum += ((current_node.value - parent_node.value) / (
@@ -494,7 +494,7 @@ class DecisionTree:
                     # Use Orignal HS
                     else:
                         cum_sum += ((current_node.value - parent_node.value) / (
-                            1 + HS_lambda/parent_node.samples)) 
+                            1 + HS_lambda/parent_node.samples))
 
                     # Replace value of node with HS value outcome
                     node_values_HS[node_id] = cum_sum
@@ -528,7 +528,7 @@ class DecisionTree:
                         node_values_[node_id] = cum_sum
                         continue
 
-                    current_node = self.node_list[node_id]  
+                    current_node = self.node_list[node_id]
                     node_id_parent = decision_path[l - 1]
                     parent_node = self.node_list[node_id_parent]
 
@@ -536,7 +536,7 @@ class DecisionTree:
                     if (smSHAP_coefs!=None):
                         cum_sum += ((clf_prob_dist[node_id]-clf_prob_dist[node_id_parent])/
                             (1 + HS_lambda / node_samples[node_id_parent])) * np.abs(smSHAP_coefs[parent_node.feature])
-                    
+
                     # test additional penalty of SmSHAP coef basedn on pct of samples in parent node of total samples
                     elif (smSHAP_coefs!=None) & (testHS==True):
                         cum_sum += ((clf_prob_dist[node_id]-clf_prob_dist[node_id_parent])/

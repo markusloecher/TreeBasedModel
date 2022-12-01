@@ -78,7 +78,7 @@ def smooth_shap(shap_values_inbag, shap_values_oob, detailed_output=False):
 
     if detailed_output:
         return smooth_shap_vals, mean_smooth_shap, lin_coefs, lin_models, shap_values_inbag, shap_values_oob
-    
+
     return smooth_shap_vals, mean_smooth_shap, lin_coefs
 
 
@@ -116,7 +116,7 @@ def conf_int_ratio_mse_ratio(pop_1, pop_2, node_val_inbag, type="regression", al
     n1 = len(pop_1) #pop1 = y_true_inbag
     n2 = len(pop_2) #pop2 = y_true_oob
 
-    #full array of node vals for MSE calc 
+    #full array of node vals for MSE calc
     node_val_pop1 = np.full(pop_1.shape, node_val_inbag)
     node_val_pop2 = np.full(pop_2.shape, node_val_inbag)
 
@@ -125,15 +125,17 @@ def conf_int_ratio_mse_ratio(pop_1, pop_2, node_val_inbag, type="regression", al
     mse_oob = mean_squared_error(node_val_pop2, pop_2)
     mse_rat = mse_inbag/mse_oob
 
-    # F value for normal distribution  with alpha and degrees of freedom dfn and dfd
+    # f value for normal distribution  with alpha and degrees of freedom dfn and dfd
     f_val_low = st.f.ppf(q=(alpha/2), dfn=n1-1, dfd=n2-1)
     f_val_up = st.f.ppf(q=1-(alpha/2), dfn=n1-1, dfd=n2-1)
+
+    #t_vals = st.t.ppf(q=(alpha/2), df=(n1-1, n2-1)) # not sure how to apply t-test with 2 degrees of freedom
 
     # confidence interval
     conf_int = np.array([f_val_low*mse_rat, f_val_up*mse_rat])
 
-    # if upper CI < 1., then take CI upper, else take 1
-    if conf_int[1]<1.:
+    # if upper CI < 1. and != inf, then take CI upper, else take 1
+    if (conf_int[1]<1.) & ((~np.array_equal(conf_int, np.array([-np.inf, -np.inf]))) or ~np.array_equal(conf_int, np.array([np.inf, np.inf]))):
         m = conf_int[1]
     else:
         m = 1.
@@ -147,7 +149,7 @@ def conf_int_cohens_d(pop_1, pop_2, reg_param=2, alpha=0.05, cohen_statistic="f"
 
     # number of samples per population
     n1 = len(pop_1)
-    n2 = len(pop_2) 
+    n2 = len(pop_2)
 
     # Mean of sample populations
     mu1 = np.mean(pop_1)
@@ -160,8 +162,8 @@ def conf_int_cohens_d(pop_1, pop_2, reg_param=2, alpha=0.05, cohen_statistic="f"
     var_pooled = ((n1-1)*var1+(n2-1)*var2)/(n1+n2-2)
 
     # cohens d
-    d = (mu1-mu2)/np.sqrt(var_pooled)  
-    
+    d = (mu1-mu2)/np.sqrt(var_pooled)
+
     eff_siz = np.sqrt((n1+n2)/(n1*n2)+(d**2/(2*(n1+n2))))
 
     # confidence interval
@@ -169,7 +171,7 @@ def conf_int_cohens_d(pop_1, pop_2, reg_param=2, alpha=0.05, cohen_statistic="f"
         conf_int = np.array([d-1.96*eff_siz, d+1.96*eff_siz])
 
     elif cohen_statistic=="t":
-        
+
         df_pooled = (n1+n2-2) # degrees of freedom pooled
         t_low = np.abs(st.t.ppf(q=(alpha/2), df=df_pooled))
         t_up = np.abs(st.t.ppf(q=(1-alpha/2), df=df_pooled))
@@ -197,12 +199,12 @@ def cross_val_score_scratch(estimator, X, y, cv=10, scoring_func=roc_auc_score, 
         estimator_copy = deepcopy(estimator)
 
         #split data
-        if isinstance(X, pd.DataFrame): 
+        if isinstance(X, pd.DataFrame):
             X_train, X_test = X.iloc[train_index], X.iloc[test_index]
             y_train, y_test = y.iloc[train_index], y.iloc[test_index]
         else:
             X_train, X_test = X[train_index], X[test_index]
-            y_train, y_test = y[train_index], y[test_index] 
+            y_train, y_test = y[train_index], y[test_index]
 
         #fit estimator, predict & score
         estimator_copy.fit(X=X_train, y=y_train)
@@ -215,7 +217,7 @@ def GridSearchCV_scratch(estimator, grid, X, y, cv=10, scoring_func=None, fit_be
 
     valid_grid_keys = [
         "reg_param", "n_trees", "HS_lambda", "max_depth", "min_samples_split",
-        "min_samples_leaf", "k", "n_features", "n_feature", "HShrinkage", 
+        "min_samples_leaf", "k", "n_features", "n_feature", "HShrinkage",
         "cohen_reg_param", "cohen_statistic", "HS_nodewise_shrink_type"
     ]
 
@@ -229,13 +231,13 @@ def GridSearchCV_scratch(estimator, grid, X, y, cv=10, scoring_func=None, fit_be
 
     keys = list(grid.keys())
 
-    
+
     # If to show for each split progress bar
     if pbar:
         pos_combs = tqdm(list(itertools.product(*grid.values()))) #Get all possible combinations of hyperparameters from grid
     else:
         pos_combs = list(itertools.product(*grid.values())) #Get all possible combinations of hyperparameters from grid
-    
+
     cv_scores = np.zeros((len(pos_combs), cv)) #array to store cv results
 
     #iterrate over all possible combinations

@@ -481,15 +481,20 @@ class DecisionTree:
                         cum_sum += ((current_node.value - parent_node.value) / (
                             1 + HS_lambda/parent_node.samples)) * np.abs(smSHAP_coefs[parent_node.feature])
 
-                    # test additional penalty of SmSHAP coef basedn on pct of samples in parent node of total samples
-                    elif (smSHAP_coefs!=None) & (testHS==True):
-                        cum_sum += ((current_node.value - parent_node.value) / (
-                            1 + HS_lambda/parent_node.samples)) * (1.-(parent_node.samples/self.node_list[0].samples))*np.abs(smSHAP_coefs[parent_node.feature])
+                    # # test additional penalty of SmSHAP coef basedn on pct of samples in parent node of total samples
+                    # elif (smSHAP_coefs!=None) & (testHS==True):
+                    #     cum_sum += ((current_node.value - parent_node.value) / (
+                    #         1 + HS_lambda/parent_node.samples)) * (1.-(parent_node.samples/self.node_list[0].samples))*np.abs(smSHAP_coefs[parent_node.feature])
 
                     # Use HS with nodewise smoothing if m_nodes are given
                     elif (m_nodes!=None):
                         cum_sum += ((current_node.value - parent_node.value) / (
                             1 + HS_lambda/parent_node.samples)) * m_nodes[node_id]
+
+                    # test m_shrinkage of lambda instead of expected term
+                    elif (m_nodes!=None) & (testHS==True):
+                        cum_sum += ((current_node.value - parent_node.value) / (
+                             1 + HS_lambda* m_nodes[node_id]/parent_node.samples))
 
                     # Use Orignal HS
                     else:

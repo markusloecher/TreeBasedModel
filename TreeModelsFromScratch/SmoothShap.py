@@ -233,10 +233,10 @@ def GridSearchCV_scratch(estimator, grid, X, y, cv=10, scoring_func=None, fit_be
 
 
     # If to show for each split progress bar
-    if pbar:
-        pos_combs = tqdm(list(itertools.product(*grid.values()))) #Get all possible combinations of hyperparameters from grid
-    else:
-        pos_combs = list(itertools.product(*grid.values())) #Get all possible combinations of hyperparameters from grid
+#    if pbar:
+#        pos_combs = tqdm(list(itertools.product(*grid.values()))) #Get all possible combinations of hyperparameters from grid
+#    else:
+    pos_combs = list(itertools.product(*grid.values())) #Get all possible combinations of hyperparameters from grid
 
     cv_scores = np.zeros((len(pos_combs), cv)) #array to store cv results
 

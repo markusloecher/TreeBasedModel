@@ -494,7 +494,7 @@ class DecisionTree:
                     # test m_shrinkage of lambda instead of expected term
                     elif (m_nodes!=None) & (testHS==True):
                         cum_sum += ((current_node.value - parent_node.value) / (
-                             1 + HS_lambda* m_nodes[node_id]/parent_node.samples))
+                             1 + HS_lambda* (1-m_nodes[node_id])/parent_node.samples))
 
                     # Use Orignal HS
                     else:

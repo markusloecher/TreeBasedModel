@@ -11,6 +11,7 @@ from shap.explainers._tree import SingleTree
 import itertools
 from tqdm import tqdm
 import scipy.stats as st
+import math
 
 
 # Utility functions to verify SHAP model which has been created based on tree output
@@ -109,6 +110,18 @@ def conf_int_ratio_two_var(pop_1, pop_2, alpha=0.05):
 
     return conf_int, m
 
+def calc_node_val(pop_2):
+    val, cnts = np.unique(pop_2, return_counts=True)
+    counts = {k: v for k, v in zip(val, cnts)}
+
+    clf_value_dis = [counts.get(0) or 0, counts.get(1) or 0]
+    n_samples = np.sum(clf_value_dis)
+
+    clf_prob_dis = (np.array(clf_value_dis) / n_samples)
+    leaf_value = np.argmax(clf_prob_dis)
+
+    return leaf_value
+
 def conf_int_ratio_mse_ratio(pop_1, pop_2, node_val_inbag, type="regression", alpha=0.05):
     '''Calculate shrinkage parameter based on confidence interval based on 2-sample difference in MSE'''
 
@@ -123,6 +136,30 @@ def conf_int_ratio_mse_ratio(pop_1, pop_2, node_val_inbag, type="regression", al
     # MSE for OOB and Inbag
     mse_inbag = mean_squared_error(node_val_pop1, pop_1)
     mse_oob = mean_squared_error(node_val_pop2, pop_2)
+
+    #if mse inbag & mse oob == 0 then set shrinkage to 1
+    if (mse_inbag==0) & (mse_oob==0):
+        return np.array([0,0]), 1.
+    #elif mse_oob ==0 and  mse inbag!=0 then check difference in node valeus
+    elif (mse_inbag!=0) & (mse_oob==0):
+        node_val_oob = calc_node_val(pop_2)
+        if math.isclose(node_val_inbag, node_val_oob):
+            return np.array([0,0]), 1.
+        elif (node_val_inbag != node_val_oob) & (type=="classification"):
+            return np.array([1,1]), 0.
+        elif (node_val_inbag != node_val_oob) & (type=="regression"):
+#            import ipdb; ipdb.set_trace()
+            # if sample sizes are ==1 add one more item which is very close to original value
+            if len(pop_1)==1:
+                pop_1 = np.append(pop_1, pop_1[0]+0.00001)
+            if len(pop_2)==1:
+                pop_2 = np.append(pop_2, pop_2[0]+0.00001)
+            _, p_val = st.ttest_ind(pop_1,pop_2,equal_var=False) #perform welch t test
+            if p_val<0.05:
+                return np.array([1,1]), 0. # node values differ a lot -> full shrinkage
+            else:
+                return np.array([0,0]), 1. # no shrinkage (are equal)
+
     mse_rat = mse_inbag/mse_oob
 
     # f value for normal distribution  with alpha and degrees of freedom dfn and dfd

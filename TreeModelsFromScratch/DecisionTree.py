@@ -486,6 +486,11 @@ class DecisionTree:
                     #     cum_sum += ((current_node.value - parent_node.value) / (
                     #         1 + HS_lambda/parent_node.samples)) * (1.-(parent_node.samples/self.node_list[0].samples))*np.abs(smSHAP_coefs[parent_node.feature])
 
+                    # Test smSHAP shrinkage on lambda instead of term
+                    # elif (smSHAP_coefs!=None) & (testHS==True):
+                    #     cum_sum += ((current_node.value - parent_node.value) / (
+                    #         1 + HS_lambda*(1-* np.abs(smSHAP_coefs[parent_node.feature]))/parent_node.samples))
+
                     # Use HS with nodewise smoothing if m_nodes are given
                     elif (m_nodes!=None):
                         cum_sum += ((current_node.value - parent_node.value) / (
@@ -542,15 +547,26 @@ class DecisionTree:
                         cum_sum += ((clf_prob_dist[node_id]-clf_prob_dist[node_id_parent])/
                             (1 + HS_lambda / node_samples[node_id_parent])) * np.abs(smSHAP_coefs[parent_node.feature])
 
-                    # test additional penalty of SmSHAP coef basedn on pct of samples in parent node of total samples
-                    elif (smSHAP_coefs!=None) & (testHS==True):
-                        cum_sum += ((clf_prob_dist[node_id]-clf_prob_dist[node_id_parent])/
-                            (1 + HS_lambda / node_samples[node_id_parent])) * (1.-(node_samples[node_id_parent]/node_samples[0]))*np.abs(smSHAP_coefs[parent_node.feature])
+                    # # test additional penalty of SmSHAP coef basedn on pct of samples in parent node of total samples
+                    # elif (smSHAP_coefs!=None) & (testHS==True):
+                    #     cum_sum += ((clf_prob_dist[node_id]-clf_prob_dist[node_id_parent])/
+                    #         (1 + HS_lambda / node_samples[node_id_parent])) * (1.-(node_samples[node_id_parent]/node_samples[0]))*np.abs(smSHAP_coefs[parent_node.feature])
+
+                    # # test SMSHAP_shrinkage of lambda instead of expected term
+                    # elif (smSHAP_coefs!=None) & (testHS==True):
+                    #     cum_sum += ((clf_prob_dist[node_id]-clf_prob_dist[node_id_parent])/
+                    #         (1 + HS_lambda*(*np.abs(smSHAP_coefs[parent_node.feature])) / node_samples[node_id_parent]))
+
 
                     # Use HS with nodewise smoothing if m_nodes are given
                     elif (m_nodes!=None):
                         cum_sum += ((clf_prob_dist[node_id]-clf_prob_dist[node_id_parent])/
                             (1 + HS_lambda / node_samples[node_id_parent])) * m_nodes[node_id]
+
+                    # test m_shrinkage of lambda instead of expected term
+                    elif (m_nodes!=None) & (testHS==True):
+                        cum_sum += ((clf_prob_dist[node_id]-clf_prob_dist[node_id_parent])/
+                            (1 + HS_lambda* (1-m_nodes[node_id]) / node_samples[node_id_parent]))
 
                     # Use Original HS
                     else:

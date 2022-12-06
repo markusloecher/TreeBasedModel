@@ -172,7 +172,7 @@ def conf_int_ratio_mse_ratio(pop_1, pop_2, node_val_inbag, type="regression", al
     conf_int = np.array([f_val_low*mse_rat, f_val_up*mse_rat])
 
     # if upper CI < 1. and != inf, then take CI upper, else take 1
-    if (conf_int[1]<1.) & ((~np.array_equal(conf_int, np.array([-np.inf, -np.inf]))) or ~np.array_equal(conf_int, np.array([np.inf, np.inf]))):
+    if (conf_int[1]<1.) & ((~np.array_equal(conf_int, np.array([-np.inf, -np.inf]))) or (~np.array_equal(conf_int, np.array([np.inf, np.inf])))):
         m = conf_int[1]
     else:
         m = 1.

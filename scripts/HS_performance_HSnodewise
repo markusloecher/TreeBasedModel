@@ -80,6 +80,7 @@ def create_performance_plot_rf(X, y, model_type="classification", cv=10, scoring
                                     HS_nodewise_shrink_type=HS_nodewise_shrink_type)
         grid_cv_result = GridSearchCV_scratch(forest_scrHSnodeMSE, grid, X, y, cv=cv, scoring_func=scoring_func,
                                                  shuffle=shuffle, random_state=random_state)
+        grid_cv_result["model"]=forest_scrHSnodeMSE
         grid_cv_results.append(grid_cv_result)
         new_cv_res_scrHSnodeMSE.append(grid_cv_result["best_test_scores"])
         print("hsRF nodewise MSE model trained")
@@ -91,6 +92,7 @@ def create_performance_plot_rf(X, y, model_type="classification", cv=10, scoring
                                         HS_nodewise_shrink_type=HS_nodewise_shrink_type, testHS=True)
             grid_cv_result_test = GridSearchCV_scratch(forest_scrHSnodeMSE_test, grid, X, y, cv=cv, scoring_func=scoring_func,
                                                     shuffle=shuffle, random_state=random_state)
+            grid_cv_result["model"]=forest_scrHSnodeMSE_test
             grid_cv_results_test.append(grid_cv_result_test)
             new_cv_res_scrHSnodeMSE_test.append(grid_cv_result_test["best_test_scores"])
             print("hsRF nodewise MSE model test trained")
@@ -110,27 +112,27 @@ def create_performance_plot_rf(X, y, model_type="classification", cv=10, scoring
         new_sem_data_scrHSnodeMSE_test = np.std(new_data_scrHSnodeMSE_test, ddof=1, axis=1) / np.sqrt(np.size(new_data_scrHSnodeMSE_test, axis=1))
 
     #Create plot
-    fig, axs = plt.subplots(1,2, figsize=(15,5))
+    fig, axs = plt.subplots(1,1, figsize=(15,5))
 
-    axs[0].errorbar(x=n_trees, y=np.array(new_data_scr).mean(axis=1), yerr=new_sem_data_scr, color="orange",
+    axs.errorbar(x=n_trees, y=np.array(new_data_scr).mean(axis=1), yerr=new_sem_data_scr, color="orange",
                 alpha=.5, linewidth=3, marker="o")
-    axs[0].errorbar(x=n_trees, y=np.array(new_data_scrHS).mean(axis=1), yerr=new_sem_data_scrHS, color="tab:blue",
+    axs.errorbar(x=n_trees, y=np.array(new_data_scrHS).mean(axis=1), yerr=new_sem_data_scrHS, color="tab:blue",
                    alpha=.5, linewidth=3, marker="o")
-    axs[0].errorbar(x=n_trees, y=np.array(new_data_scrHSnodeMSE).mean(axis=1), yerr=new_sem_data_scrHSnodeMSE, color="green",
+    axs.errorbar(x=n_trees, y=np.array(new_data_scrHSnodeMSE).mean(axis=1), yerr=new_sem_data_scrHSnodeMSE, color="green",
                 alpha=.5, linewidth=3, marker="o")
     if testHS:
-        axs[0].errorbar(x=n_trees, y=np.array(new_data_scrHSnodeMSE_test).mean(axis=1), yerr=new_sem_data_scrHSnodeMSE_test, color="red",
+        axs.errorbar(x=n_trees, y=np.array(new_data_scrHSnodeMSE_test).mean(axis=1), yerr=new_sem_data_scrHSnodeMSE_test, color="red",
                 alpha=.5, linewidth=3, marker="o")
 
-    axs[0].set_title(f"{dset_name} (n = {X.shape[0]}, p = {X.shape[1]})")
-    axs[0].set_xlabel("Number of Trees")
+    axs.set_title(f"{dset_name} (n = {X.shape[0]}, p = {X.shape[1]})")
+    axs.set_xlabel("Number of Trees")
     y_label = "AUC" if str(scoring_func).split()[1]=="roc_auc_score" else "R2"
-    axs[0].set_ylabel(y_label)
+    axs.set_ylabel(y_label)
     if testHS:
-        axs[0].legend(["RF scratch", "hsRF scratch CV", "hsRF nodewise MSE scratch CV", "hsRF nodewise MSE scratch CV test"])
+        axs.legend(["RF scratch", "hsRF scratch CV", "hsRF nodewise MSE scratch CV", "hsRF nodewise MSE scratch CV test"])
     else:
-        axs[0].legend(["RF scratch", "hsRF scratch CV", "hsRF nodewise MSE scratch CV"])
-    axs[-1].axis('off')
+        axs.legend(["RF scratch", "hsRF scratch CV", "hsRF nodewise MSE scratch CV"])
+    #axs[-1].axis('off')
 
     if savefig:
         filename = f"{data_path}/{today_str}_{dset_name}_plot.png"

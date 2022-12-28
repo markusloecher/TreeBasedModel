@@ -68,6 +68,8 @@ class DecisionTree:
             self.n_features = X.shape[1]
         elif self.n_features=="sqrt":
             self.n_features = int(np.rint(np.sqrt(X.shape[1]))) #square root of number of feats in X
+        elif isinstance(self.n_features, float):
+            self.n_features = max(1, int(self.n_features * X.shape[1]))
         else:
             self.n_features = min(X.shape[1], self.n_features)
 

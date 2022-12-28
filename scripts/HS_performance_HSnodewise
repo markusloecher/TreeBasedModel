@@ -112,7 +112,7 @@ def create_performance_plot_rf(X, y, model_type="classification", cv=10, scoring
         new_sem_data_scrHSnodeMSE_test = np.std(new_data_scrHSnodeMSE_test, ddof=1, axis=1) / np.sqrt(np.size(new_data_scrHSnodeMSE_test, axis=1))
 
     #Create plot
-    fig, axs = plt.subplots(1,1, figsize=(15,5))
+    fig, axs = plt.subplots(1,1, figsize=(7,5))
 
     axs.errorbar(x=n_trees, y=np.array(new_data_scr).mean(axis=1), yerr=new_sem_data_scr, color="orange",
                 alpha=.5, linewidth=3, marker="o")

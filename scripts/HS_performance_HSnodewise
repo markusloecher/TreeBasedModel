@@ -20,7 +20,7 @@ from itertools import repeat
 import warnings
 
 
-# Add parser to change hyperparameters from command line 
+# Add parser to change hyperparameters from command line
 def simulation_options():
     parser = argparse.ArgumentParser()
     parser.add_argument("--DS_number", default=[1], type=int, nargs="+", help='List of numbers of dataset in DATASETS_CLASSIFICATION or DATASETS_REGRESSION ')
@@ -33,14 +33,15 @@ def simulation_options():
     parser.add_argument("--scoring_func", default="roc_auc_score", type=str, help='scoring function')
     parser.add_argument("--random_state", default=None, type=int, help='random state seed')
     parser.add_argument("--HS_nodewise_shrink_type", default=None, type=str, help='If nodewiseshrinkage should be applied. Value: MSE_ratio')
+    parser.add_argument("--testHS", default=False, type=bool, help='If test nodewiseshrinkage should be applied.')
     opt = parser.parse_args()
     return opt
 
 def create_performance_plot_rf(X, y, model_type="classification", cv=10, scoring_func=roc_auc_score, n_feature="sqrt",
-                                n_trees = [15,25,50,100], shuffle=True, random_state=42, dset_name=None, savefig=True, 
+                                n_trees = [15,25,50,100], shuffle=True, random_state=42, dset_name=None, savefig=True,
                                 lambda_list = [0.1,1,5,10,20,50,100], HS_nodewise_shrink_type=None,
-                                data_path=os.path.join(os.path.dirname(os.getcwd()),"data","HS_performance"), 
-                                today_str=datetime.today().strftime("%Y%m%d")):
+                                data_path=os.path.join(os.path.dirname(os.getcwd()),"data","HS_performance"),
+                                today_str=datetime.today().strftime("%Y%m%d"), testHS=False):
     '''Run performance test for RF scratch models, with HS and HS with nodewise MSE on datasets used in original HS paper'''
 
     # For storing results
@@ -49,36 +50,52 @@ def create_performance_plot_rf(X, y, model_type="classification", cv=10, scoring
     new_cv_res_scrHSnodeMSE = []
     grid_cv_resultsHS = []
     grid_cv_results = []
-    
+    if testHS:
+        grid_cv_results_test = []
+        new_cv_res_scrHSnodeMSE_test = []
+
     for n_tree in tqdm(n_trees):
         print(f"{dset_name}: Iteration with {n_tree} trees started")
 
         #scratch
-        forest_scr = RandomForest(n_trees=n_tree, treetype=model_type, random_state=random_state, 
+        forest_scr = RandomForest(n_trees=n_tree, treetype=model_type, random_state=random_state,
                                   n_feature=n_feature, oob=False)
-        new_cv_res_scr.append(cross_val_score_scratch(forest_scr, X, y, cv=cv, scoring_func=scoring_func, 
+        new_cv_res_scr.append(cross_val_score_scratch(forest_scr, X, y, cv=cv, scoring_func=scoring_func,
                                                  shuffle=shuffle, random_state=random_state))
         print("RF model trained")
 
         #scratchHS
         grid = {"HS_lambda":lambda_list}
-        forest_scrHS = RandomForest(n_trees=n_tree, treetype=model_type, n_feature=n_feature, 
+        forest_scrHS = RandomForest(n_trees=n_tree, treetype=model_type, n_feature=n_feature,
                                     HShrinkage=True, random_state=random_state, oob=False)
-        grid_cv_resultHS = GridSearchCV_scratch(forest_scrHS, grid, X, y, cv=cv, scoring_func=scoring_func, 
+        grid_cv_resultHS = GridSearchCV_scratch(forest_scrHS, grid, X, y, cv=cv, scoring_func=scoring_func,
                                                  shuffle=shuffle, random_state=random_state)
-        grid_cv_resultsHS.append(grid_cv_resultHS)  
-        new_cv_res_scrHS.append(grid_cv_resultHS["best_test_scores"])  
+        grid_cv_resultsHS.append(grid_cv_resultHS)
+        new_cv_res_scrHS.append(grid_cv_resultHS["best_test_scores"])
         print("hsRF model trained")
 
         #scratchHS with nodewise MSE smoothing
-        forest_scrHSnodeMSE = RandomForest(n_trees=n_tree, treetype=model_type, n_feature=n_feature, 
-                                    HShrinkage=False, random_state=random_state, oob=True, 
+        forest_scrHSnodeMSE = RandomForest(n_trees=n_tree, treetype=model_type, n_feature=n_feature,
+                                    HShrinkage=False, random_state=random_state, oob=True,
                                     HS_nodewise_shrink_type=HS_nodewise_shrink_type)
-        grid_cv_result = GridSearchCV_scratch(forest_scrHSnodeMSE, grid, X, y, cv=cv, scoring_func=scoring_func, 
+        grid_cv_result = GridSearchCV_scratch(forest_scrHSnodeMSE, grid, X, y, cv=cv, scoring_func=scoring_func,
                                                  shuffle=shuffle, random_state=random_state)
+        grid_cv_result["model"]=forest_scrHSnodeMSE
         grid_cv_results.append(grid_cv_result)
-        new_cv_res_scrHSnodeMSE.append(grid_cv_result["best_test_scores"])        
+        new_cv_res_scrHSnodeMSE.append(grid_cv_result["best_test_scores"])
         print("hsRF nodewise MSE model trained")
+
+        if testHS:
+            #scratchHS with nodewise MSE smoothing test
+            forest_scrHSnodeMSE_test = RandomForest(n_trees=n_tree, treetype=model_type, n_feature=n_feature,
+                                        HShrinkage=False, random_state=random_state, oob=True,
+                                        HS_nodewise_shrink_type=HS_nodewise_shrink_type, testHS=True)
+            grid_cv_result_test = GridSearchCV_scratch(forest_scrHSnodeMSE_test, grid, X, y, cv=cv, scoring_func=scoring_func,
+                                                    shuffle=shuffle, random_state=random_state)
+            grid_cv_result["model"]=forest_scrHSnodeMSE_test
+            grid_cv_results_test.append(grid_cv_result_test)
+            new_cv_res_scrHSnodeMSE_test.append(grid_cv_result_test["best_test_scores"])
+            print("hsRF nodewise MSE model test trained")
 
     #Compute standard error of mean
     new_data_scr = np.array(new_cv_res_scr)
@@ -88,30 +105,40 @@ def create_performance_plot_rf(X, y, model_type="classification", cv=10, scoring
     new_sem_data_scrHS = np.std(new_data_scrHS, ddof=1, axis=1) / np.sqrt(np.size(new_data_scrHS, axis=1))
 
     new_data_scrHSnodeMSE = np.array(new_cv_res_scrHSnodeMSE)
-    new_sem_data_scrHSnodeMSE = np.std(new_cv_res_scrHSnodeMSE, ddof=1, axis=1) / np.sqrt(np.size(new_cv_res_scrHSnodeMSE, axis=1))
-    
+    new_sem_data_scrHSnodeMSE = np.std(new_data_scrHSnodeMSE, ddof=1, axis=1) / np.sqrt(np.size(new_cv_res_scrHSnodeMSE, axis=1))
+
+    if testHS:
+        new_data_scrHSnodeMSE_test = np.array(new_cv_res_scrHSnodeMSE_test)
+        new_sem_data_scrHSnodeMSE_test = np.std(new_data_scrHSnodeMSE_test, ddof=1, axis=1) / np.sqrt(np.size(new_data_scrHSnodeMSE_test, axis=1))
+
     #Create plot
-    fig, axs = plt.subplots(1,2, figsize=(15,5))
-    
-    axs[0].errorbar(x=n_trees, y=np.array(new_data_scr).mean(axis=1), yerr=new_sem_data_scr, color="orange", 
+    fig, axs = plt.subplots(1,1, figsize=(7,5))
+
+    axs.errorbar(x=n_trees, y=np.array(new_data_scr).mean(axis=1), yerr=new_sem_data_scr, color="orange",
                 alpha=.5, linewidth=3, marker="o")
-    axs[0].errorbar(x=n_trees, y=np.array(new_data_scrHS).mean(axis=1), yerr=new_sem_data_scrHS, color="tab:blue", 
+    axs.errorbar(x=n_trees, y=np.array(new_data_scrHS).mean(axis=1), yerr=new_sem_data_scrHS, color="tab:blue",
                    alpha=.5, linewidth=3, marker="o")
-    axs[0].errorbar(x=n_trees, y=np.array(new_data_scrHSnodeMSE).mean(axis=1), yerr=new_sem_data_scrHSnodeMSE, color="green", 
+    axs.errorbar(x=n_trees, y=np.array(new_data_scrHSnodeMSE).mean(axis=1), yerr=new_sem_data_scrHSnodeMSE, color="green",
+                alpha=.5, linewidth=3, marker="o")
+    if testHS:
+        axs.errorbar(x=n_trees, y=np.array(new_data_scrHSnodeMSE_test).mean(axis=1), yerr=new_sem_data_scrHSnodeMSE_test, color="red",
                 alpha=.5, linewidth=3, marker="o")
 
-    axs[0].set_title(f"{dset_name} (n = {X.shape[0]}, p = {X.shape[1]})")
-    axs[0].set_xlabel("Number of Trees")
+    axs.set_title(f"{dset_name} (n = {X.shape[0]}, p = {X.shape[1]})")
+    axs.set_xlabel("Number of Trees")
     y_label = "AUC" if str(scoring_func).split()[1]=="roc_auc_score" else "R2"
-    axs[0].set_ylabel(y_label)
-    axs[0].legend(["RF scratch", "hsRF scratch CV", "hsRF nodewise MSE scratch CV"])
-    axs[-1].axis('off')
+    axs.set_ylabel(y_label)
+    if testHS:
+        axs.legend(["RF scratch", "hsRF scratch CV", "hsRF nodewise MSE scratch CV", "hsRF nodewise MSE scratch CV test"])
+    else:
+        axs.legend(["RF scratch", "hsRF scratch CV", "hsRF nodewise MSE scratch CV"])
+    #axs[-1].axis('off')
 
     if savefig:
         filename = f"{data_path}/{today_str}_{dset_name}_plot.png"
         fig.savefig(filename)
         print("Image stored under :", filename)
-    
+
     data = {
         "results_scratch_RF":
             {
@@ -132,11 +159,18 @@ def create_performance_plot_rf(X, y, model_type="classification", cv=10, scoring
             }
         }
 
+    if testHS:
+        data["results_scratch_hsRF_nodeMSE_test"]={
+                "data": new_data_scrHSnodeMSE_test,
+                "sem": new_sem_data_scrHSnodeMSE_test,
+                "grid_cv_results":grid_cv_results_test
+            }
+
     return data
 
 
 def run_performance_test(DS_number, opt, data_path, today_str):
-    
+
     #Load dataset
     if opt.model_type =="classification":
         dset_name, dset_file, data_source = DATASETS_CLASSIFICATION[DS_number]
@@ -153,12 +187,12 @@ def run_performance_test(DS_number, opt, data_path, today_str):
     }
 
     # Run performance test
-    data = create_performance_plot_rf(X, y, model_type=opt.model_type, cv=opt.cv, 
+    data = create_performance_plot_rf(X, y, model_type=opt.model_type, cv=opt.cv,
             scoring_func=scoring_func_dict.get(opt.scoring_func), n_feature=opt.n_features,
-            n_trees = opt.n_trees_list, shuffle=True, random_state=opt.random_state, 
+            n_trees = opt.n_trees_list, shuffle=True, random_state=opt.random_state,
             HS_nodewise_shrink_type=opt.HS_nodewise_shrink_type,
-            lambda_list=opt.lambda_list, dset_name=dset_name, savefig=True, data_path=data_path, 
-            today_str=today_str)
+            lambda_list=opt.lambda_list, dset_name=dset_name, savefig=True, data_path=data_path,
+            today_str=today_str, testHS=opt.testHS)
 
     # Add simulation parameters to result dict
     data["simulation_settings"]= opt
@@ -166,15 +200,15 @@ def run_performance_test(DS_number, opt, data_path, today_str):
     # Store results as pickle file
     with open(f"{data_path}/{today_str}_{dset_name}_results.pickle", 'wb') as handle:
         pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    
+
     print(f"Data stored under : {data_path}/{today_str}_{dset_name}_results.pickle")
 
 
 if __name__=="__main__":
 
     # ignore warnings regarding nested arrays
-    warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning) 
-    
+    warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
+
     # Get arguments from command line
     opt = simulation_options()
 

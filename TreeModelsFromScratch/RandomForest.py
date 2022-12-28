@@ -29,7 +29,8 @@ class RandomForest:
                  alpha=0.05,
                  cohen_statistic="f",
                  k=None,
-                 random_state=None):
+                 random_state=None,
+                 testHS=False):
         self.n_trees = n_trees
         self.max_depth=max_depth
         self.min_samples_split=min_samples_split
@@ -55,6 +56,7 @@ class RandomForest:
         self.feature_names = None
         self.smSHAP_HS_applied = False
         self.nodewise_HS_applied = False
+        self.testHS = testHS
 
     def _check_random_state(self, seed):
         if isinstance(seed, numbers.Integral) or seed==None:
@@ -131,7 +133,7 @@ class RandomForest:
 
                 # Apply nodewise HS
                 if self.HS_nodewise_shrink_type != None:
-                    self.apply_nodewise_HS(tree, X_inbag, y_inbag, X_oob, y_oob, shrinkage_type=self.HS_nodewise_shrink_type, HS_lambda=self.HS_lambda, cohen_reg_param=self.cohen_reg_param, alpha=self.alpha, cohen_statistic=self.cohen_statistic)
+                    self.apply_nodewise_HS(tree, X_inbag, y_inbag, X_oob, y_oob, shrinkage_type=self.HS_nodewise_shrink_type, HS_lambda=self.HS_lambda, cohen_reg_param=self.cohen_reg_param, alpha=self.alpha, cohen_statistic=self.cohen_statistic, testHS=self.testHS)
 
                 # Compute inbag and oob SHAP values
                 if self.oob_SHAP:
@@ -330,7 +332,7 @@ class RandomForest:
         #set attribute to store that smSHAP HS wasused
         self.smSHAP_HS_applied=True
 
-    def apply_nodewise_HS(self, tree, X_inbag, y_inbag, X_oob, y_oob, shrinkage_type="MSE_ratio", HS_lambda=0, cohen_reg_param=2, alpha=0.05, cohen_statistic="f"):
+    def apply_nodewise_HS(self, tree, X_inbag, y_inbag, X_oob, y_oob, shrinkage_type="MSE_ratio", HS_lambda=0, cohen_reg_param=2, alpha=0.05, cohen_statistic="f", testHS=False):
         '''Apply HS using smoothing coefficient based on discrepancies between inbag and oob data. Overwrites values of fitted tree. Can also be applied post hoc'''
 
         #check if forest already used HS during training: if yes, return error
@@ -354,7 +356,7 @@ class RandomForest:
             if shrinkage_type=="MSE_ratio":
                 conf_int, m = conf_int_ratio_mse_ratio(y_inbag_p_node[i,:][~np.isnan(y_inbag_p_node[i,:])], #filter out nans
                                                         y_oob_p_node[i,:][~np.isnan(y_oob_p_node[i,:])], #filter out nans
-                                                        tree.node_list[i].value, alpha=alpha)
+                                                        tree.node_list[i].value, alpha=alpha, type=tree.treetype)
                 conf_int_nodes.append(conf_int)
                 m_nodes.append(m)
             elif shrinkage_type=="effect_size":
@@ -365,7 +367,7 @@ class RandomForest:
                 m_nodes.append(m)
 
         # apply HS with smoothing m parameter
-        tree._apply_hierarchical_srinkage(HS_lambda=HS_lambda, m_nodes=m_nodes) #apply HS with nodewise HS
+        tree._apply_hierarchical_srinkage(HS_lambda=HS_lambda, m_nodes=m_nodes, testHS=testHS) #apply HS with nodewise HS
         tree._create_node_dict() # Update node dict attributes for each tree
 
         # store m_nodes, conf_interval_nodes and other parameter settings as class attribute

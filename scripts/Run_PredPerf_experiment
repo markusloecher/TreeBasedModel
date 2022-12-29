@@ -1,0 +1,241 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+# Imports
+import argparse
+from sklearn.metrics import roc_auc_score, r2_score, accuracy_score
+from sklearn.model_selection import train_test_split
+from tqdm import tqdm
+from TreeModelsFromScratch.RandomForest import RandomForest
+from TreeModelsFromScratch.SmoothShap import cross_val_score_scratch, GridSearchCV_scratch
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import pickle
+from TreeModelsFromScratch.datasets import DATASETS_CLASSIFICATION, DATASETS_REGRESSION, DATASET_PATH
+from imodels.util.data_util import get_clean_dataset
+import os
+from datetime import datetime
+from multiprocessing import Pool
+from itertools import repeat
+from scipy.stats import sem
+
+
+def simulation_options():
+    """Add parser to change hyperparameters from command line"""
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--DS_number", default=[1,2,3,5,6], type=int, nargs="+", help='List of numbers of dataset in DATASETS_CLASSIFICATION or DATASETS_REGRESSION ')
+    parser.add_argument("--other_DS", default=None, type=str, help='If other dataset which is not included in imodels should be used.')
+    parser.add_argument("--model_type", default="classification", type=str, help='model type (classification or regression')
+    parser.add_argument("--n_trees_list", default=[15,25,50,100], nargs="+", type=int, help='Different number of trees to be tested')
+    parser.add_argument("--max_depth", default=None, type=int, help='maximum depth')
+    parser.add_argument("--lambda_list", default=[0.1,1,10,25,50,100], nargs="+", type=int, help='List of lambdas to test during gridsearch')
+    parser.add_argument("--cv", default=3, type=int, help='number of folds')
+    parser.add_argument("--scoring_func", default="roc_auc_score", type=str, help='scoring function')
+    parser.add_argument("--random_state", default=None, type=int, help='random state seed')
+    opt = parser.parse_args()
+    return opt
+
+
+def run_single_experiment(X, y, model_type="classification", cv=3, scoring_func=roc_auc_score, n_trees = [15,25,50,100],
+                          shuffle=True, random_state=None, lambda_list = [0.1,1,10,25,50,100]):
+    '''Run predictive performance experiment for RF models (RF, HsRF, AugHsRF smSHAP, AugHsRF MSE) on HS datasets'''
+
+    #Create random generator with random state
+    random_gen = np.random.RandomState(random_state)
+    MAX_INT = np.iinfo(np.int32).max
+    seed_list = random_gen.randint(MAX_INT, size=2) # create two random seeds, one for the train test split, the other for the state of all the models (so they are equal)
+
+    # Split dataset into train-test
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1/3, random_state=seed_list[0])
+
+    # Split test data into 10 random splits
+    X_test_splits = np.array_split(X_test,10)
+    y_test_splits = np.array_split(y_test,10)
+
+    # Set mtry for classification to sqrt(m) and 1/3m for regression, where m is the number of features in the dataset
+    if model_type=="classification":
+        n_feature="sqrt"
+    else:
+        n_feature=1/3
+
+    # Lists for storing results from GridSearch cross-validation
+    cv_res_HsRF = []
+    cv_res_AugHS_smSHAP = []
+    cv_res_AugHS_MSE = []
+
+    # Lists for storing best models per iteration
+    RF_models=[]
+    HsRF_models=[]
+    AugHS_smSHAP_models=[]
+    AugHS_mse_models=[]
+
+    # Arrays for storing scoring results p. iterration and test set split
+    scores_RF=np.full((len(n_trees), 10), np.nan)
+    scores_HsRF=np.full((len(n_trees), 10), np.nan)
+    scores_AugHS_smSHAP=np.full((len(n_trees), 10), np.nan)
+    scores_AugHS_mse=np.full((len(n_trees), 10), np.nan)
+
+    # Iterate over each number of trees
+    for i, n_tree in enumerate(tqdm(n_trees)):
+
+        # RF model without regularization
+        rf = RandomForest(n_trees=n_tree, treetype=model_type, random_state=seed_list[1],
+                                  n_feature=n_feature, oob=False)
+        rf.fit(X_train, y_train)
+        RF_models.append(rf)
+        print("RF model trained")
+
+        #HsRF
+        grid = {"HS_lambda":lambda_list}
+        HsRF = RandomForest(n_trees=n_tree, treetype=model_type, n_feature=n_feature,
+                                    HShrinkage=True, random_state=seed_list[1], oob=False)
+        grid_result_ = GridSearchCV_scratch(HsRF, grid, X_train, y_train, cv=cv, scoring_func=scoring_func,
+                                                 shuffle=shuffle, random_state=seed_list[1])
+        grid_result_["HS_lambda"] = HsRF.HS_lambda
+        cv_res_HsRF.append(grid_result_)
+        HsRF_models.append(HsRF)
+        print("hsRF model trained")
+
+        # AugHS smSHAP
+        AugHS_smSHAP = RandomForest(n_trees=n_tree, treetype=model_type, n_feature=n_feature,
+                                    HShrinkage=False, random_state=seed_list[1], oob=True,
+                                    oob_SHAP=True, HS_smSHAP=True)
+        grid_result_ = GridSearchCV_scratch(AugHS_smSHAP, grid, X_train, y_train, cv=cv, scoring_func=scoring_func,
+                                                 shuffle=shuffle, random_state=seed_list[1])
+        grid_result_["smSHAP_coefs"] = AugHS_smSHAP.smSHAP_coefs
+        grid_result_["HS_lambda"] = AugHS_smSHAP.HS_lambda
+        cv_res_AugHS_smSHAP.append(grid_result_)
+        AugHS_smSHAP_models.append(AugHS_smSHAP)
+        print("AugHsRF smSHAP model trained")
+
+        # AugHS MSE
+        AugHS_mse = RandomForest(n_trees=n_tree, treetype=model_type, n_feature=n_feature,
+                                    HShrinkage=False, random_state=seed_list[1], oob=True,
+                                    HS_nodewise_shrink_type="MSE_ratio")
+        grid_result_ = GridSearchCV_scratch(AugHS_mse, grid, X_train, y_train, cv=cv, scoring_func=scoring_func,
+                                                 shuffle=shuffle, random_state=seed_list[1])
+        grid_result_["HS_lambda"] = AugHS_mse.HS_lambda
+        cv_res_AugHS_MSE.append(grid_result_)
+        AugHS_mse_models.append(AugHS_mse)
+        print("AugHsRF MSE model trained")
+
+        # Get scores for each model for all splits
+        for j, (X_test_split, y_test_split) in enumerate(zip(X_test_splits, y_test_splits)):
+            scores_RF[i,j] = scoring_func(y_test_split, rf.predict(X_test_split))
+            scores_HsRF[i,j] = scoring_func(y_test_split, HsRF.predict(X_test_split))
+            scores_AugHS_smSHAP[i,j] = scoring_func(y_test_split, AugHS_smSHAP.predict(X_test_split))
+            scores_AugHS_mse[i,j] = scoring_func(y_test_split, AugHS_mse.predict(X_test_split))
+        print("Predictions completed")
+
+    # Calculate SEM
+    sem_RF = sem(scores_RF, axis=1)
+    sem_HsRF = sem(scores_HsRF, axis=1)
+    sem_AugHS_smSHAP = sem(scores_AugHS_smSHAP, axis=1)
+    sem_AugHS_mse = sem(scores_AugHS_mse, axis=1)
+
+    # Store experiment results in dictonary
+    data = {
+        "data":
+            {
+                "X": X,
+                "y": y,
+                "X_train": X_train,
+                "X_test": X_test,
+                "y_train": y_train,
+                "y_test": y_test,
+                "X_test_splits": X_test_splits,
+                "y_test_splits": y_test_splits,
+                "random_gen": random_gen,
+                "seed_list": seed_list
+            },
+        "RF":
+            {
+                "models": RF_models,
+                "sem": sem_RF,
+                "scores": scores_RF
+            },
+        "HsRF":
+            {
+                "models": HsRF_models,
+                "sem": sem_HsRF,
+                "scores": scores_HsRF,
+                "grid_cv_results":cv_res_HsRF
+            },
+        "AugHS_smSHAP":
+            {
+                "models": AugHS_smSHAP_models,
+                "sem": sem_AugHS_smSHAP,
+                "scores": scores_AugHS_smSHAP,
+                "grid_cv_results":cv_res_AugHS_smSHAP
+            },
+        "AugHS_mse":
+            {
+                "models": AugHS_mse_models,
+                "sem": sem_AugHS_mse,
+                "scores": scores_AugHS_mse,
+                "grid_cv_results":cv_res_AugHS_MSE
+            }
+        }
+
+    return data
+
+
+def run_performance_comparison(DS_number, opt, data_path):
+
+    #Load HS datasets
+    if (opt.model_type =="classification") & (opt.other_DS==None):
+        dset_name, dset_file, data_source = DATASETS_CLASSIFICATION[DS_number]
+        X, y, feat_names = get_clean_dataset(dset_file, data_source, DATASET_PATH)
+    elif (opt.model_type =="regression") & (opt.other_DS==None):
+        dset_name, dset_file, data_source = DATASETS_REGRESSION[DS_number]
+        X, y, feat_names = get_clean_dataset(dset_file, data_source, DATASET_PATH)
+
+    # Load datasets which are not included in original HS paper
+    elif opt.other_DS!=None:
+        dset_name = opt.other_DS
+        # Load and clean titanic
+        if dset_name=="titanic":
+            dset_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),"raw_data","titanic", "titanic_train.csv")
+            data = pd.read_csv(dset_file)
+            data = data[data["Age"].notnull()] #filter rows which are nan
+            data["Sex (Female)"] = pd.get_dummies(data["Sex"])["female"] #dummy code sex (1==Female)
+            X = data[['Age', 'Pclass', 'Sex (Female)', 'PassengerId']]
+            y = data["Survived"].astype("float")
+            feat_names = X.columns.tolist()
+
+    print(f"{dset_name} loaded")
+
+    # Load scoring function
+    scoring_func_dict = {
+        "roc_auc_score": roc_auc_score,
+        "r2_score": r2_score,
+        "accuracy_score": accuracy_score}
+
+    # Run performance test
+    data = run_single_experiment(X, y, model_type=opt.model_type, cv=opt.cv, scoring_func=scoring_func_dict.get(opt.scoring_func),
+                                 n_trees = opt.n_trees_list, shuffle=True, random_state=opt.random_state, lambda_list=opt.lambda_list)
+
+    # Add simulation parameters to result dict
+    data["data"]["dataset_name"]= dset_name
+    data["data"]["feat_names"]= feat_names
+    data["simulation_settings"]= opt
+
+    # Store results as pickle file
+    with open(f"{data_path}/{dset_name}_experiment_results.pickle", 'wb') as handle:
+        pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    print(f"Data stored under : {data_path}/{dset_name}_experiment_results.pickle")
+
+
+if __name__=="__main__":
+
+    # Get arguments from command line
+    opt = simulation_options()
+
+    # for storing results
+    data_path = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))),"data","pred_perf_experiment", opt.model_type)
+
+    # Parallelize script for all given datasets
+    pool= Pool(processes=len(opt.DS_number))
+    pool.starmap(run_performance_comparison, zip(opt.DS_number, repeat(opt), repeat(data_path)))

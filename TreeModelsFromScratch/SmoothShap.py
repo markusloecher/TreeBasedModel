@@ -143,30 +143,22 @@ def conf_int_ratio_mse_ratio(pop_1, pop_2, node_val_inbag, type="regression", al
     #elif mse_oob ==0 and  mse inbag!=0 then check difference in node valeus
     elif (mse_inbag!=0) & (mse_oob==0):
         node_val_oob = calc_node_val(pop_2)
-        if math.isclose(node_val_inbag, node_val_oob):
+        if math.isclose(node_val_inbag, node_val_oob): #if close set to 1
             return np.array([0,0]), 1.
-        elif (node_val_inbag != node_val_oob) & (type=="classification"):
+        elif (node_val_inbag != node_val_oob): #if different set to 0
             return np.array([1,1]), 0.
-        elif (node_val_inbag != node_val_oob) & (type=="regression"):
-#            import ipdb; ipdb.set_trace()
-            # if sample sizes are ==1 add one more item which is very close to original value
-            if len(pop_1)==1:
-                pop_1 = np.append(pop_1, pop_1[0]+0.00001)
-            if len(pop_2)==1:
-                pop_2 = np.append(pop_2, pop_2[0]+0.00001)
-            _, p_val = st.ttest_ind(pop_1,pop_2,equal_var=False) #perform welch t test
-            if p_val<0.05:
-                return np.array([1,1]), 0. # node values differ a lot -> full shrinkage
-            else:
-                return np.array([0,0]), 1. # no shrinkage (are equal)
 
     mse_rat = mse_inbag/mse_oob
+
+    #Set degrees of freeedom to 1 if only one sample in node (otherwise f value can not be determined)
+    if n1==1:
+        n1+=1
+    if n2==1:
+        n2+=1
 
     # f value for normal distribution  with alpha and degrees of freedom dfn and dfd
     f_val_low = st.f.ppf(q=(alpha/2), dfn=n1-1, dfd=n2-1)
     f_val_up = st.f.ppf(q=1-(alpha/2), dfn=n1-1, dfd=n2-1)
-
-    #t_vals = st.t.ppf(q=(alpha/2), df=(n1-1, n2-1)) # not sure how to apply t-test with 2 degrees of freedom
 
     # confidence interval
     conf_int = np.array([f_val_low*mse_rat, f_val_up*mse_rat])

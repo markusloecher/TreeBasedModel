@@ -44,7 +44,7 @@ def run_single_experiment(X, y, model_type="classification", cv=3, scoring_func=
     #Create random generator with random state
     random_gen = np.random.RandomState(random_state)
     MAX_INT = np.iinfo(np.int32).max
-    seed_list = random_gen.randint(MAX_INT, size=2) # create two random seeds, one for the train test split, the other for the state of all the models (so they are equal)
+    seed_list = random_gen.randint(MAX_INT, size=5) # create 5 random seeds, one for the train test split, the others for the state of all the models for each iterration (so they are equal)
 
     # Split dataset into train-test
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1/3, random_state=seed_list[0])
@@ -80,7 +80,7 @@ def run_single_experiment(X, y, model_type="classification", cv=3, scoring_func=
     for i, n_tree in enumerate(tqdm(n_trees)):
 
         # RF model without regularization
-        rf = RandomForest(n_trees=n_tree, treetype=model_type, random_state=seed_list[1],
+        rf = RandomForest(n_trees=n_tree, treetype=model_type, random_state=seed_list[i+1],
                                   n_feature=n_feature, oob=False)
         rf.fit(X_train, y_train)
         RF_models.append(rf)
@@ -89,9 +89,9 @@ def run_single_experiment(X, y, model_type="classification", cv=3, scoring_func=
         #HsRF
         grid = {"HS_lambda":lambda_list}
         HsRF = RandomForest(n_trees=n_tree, treetype=model_type, n_feature=n_feature,
-                                    HShrinkage=True, random_state=seed_list[1], oob=False)
+                                    HShrinkage=True, random_state=seed_list[i+1], oob=False)
         grid_result_ = GridSearchCV_scratch(HsRF, grid, X_train, y_train, cv=cv, scoring_func=scoring_func,
-                                                 shuffle=shuffle, random_state=seed_list[1])
+                                                 shuffle=shuffle, random_state=seed_list[0])
         grid_result_["HS_lambda"] = HsRF.HS_lambda
         cv_res_HsRF.append(grid_result_)
         HsRF_models.append(HsRF)
@@ -99,10 +99,10 @@ def run_single_experiment(X, y, model_type="classification", cv=3, scoring_func=
 
         # AugHS smSHAP
         AugHS_smSHAP = RandomForest(n_trees=n_tree, treetype=model_type, n_feature=n_feature,
-                                    HShrinkage=False, random_state=seed_list[1], oob=True,
+                                    HShrinkage=False, random_state=seed_list[i+1], oob=True,
                                     oob_SHAP=True, HS_smSHAP=True)
         grid_result_ = GridSearchCV_scratch(AugHS_smSHAP, grid, X_train, y_train, cv=cv, scoring_func=scoring_func,
-                                                 shuffle=shuffle, random_state=seed_list[1])
+                                                 shuffle=shuffle, random_state=seed_list[0])
         grid_result_["smSHAP_coefs"] = AugHS_smSHAP.smSHAP_coefs
         grid_result_["HS_lambda"] = AugHS_smSHAP.HS_lambda
         cv_res_AugHS_smSHAP.append(grid_result_)
@@ -111,10 +111,10 @@ def run_single_experiment(X, y, model_type="classification", cv=3, scoring_func=
 
         # AugHS MSE
         AugHS_mse = RandomForest(n_trees=n_tree, treetype=model_type, n_feature=n_feature,
-                                    HShrinkage=False, random_state=seed_list[1], oob=True,
+                                    HShrinkage=False, random_state=seed_list[i+1], oob=True,
                                     HS_nodewise_shrink_type="MSE_ratio")
         grid_result_ = GridSearchCV_scratch(AugHS_mse, grid, X_train, y_train, cv=cv, scoring_func=scoring_func,
-                                                 shuffle=shuffle, random_state=seed_list[1])
+                                                 shuffle=shuffle, random_state=seed_list[0])
         grid_result_["HS_lambda"] = AugHS_mse.HS_lambda
         cv_res_AugHS_MSE.append(grid_result_)
         AugHS_mse_models.append(AugHS_mse)

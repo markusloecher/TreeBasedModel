@@ -356,7 +356,10 @@ class RandomForest:
             if shrinkage_type=="MSE_ratio":
                 conf_int, m = conf_int_ratio_mse_ratio(y_inbag_p_node[i,:][~np.isnan(y_inbag_p_node[i,:])], #filter out nans
                                                         y_oob_p_node[i,:][~np.isnan(y_oob_p_node[i,:])], #filter out nans
-                                                        tree.node_list[i].value, alpha=alpha, type=tree.treetype)
+                                                        tree.node_list[i].value,
+                                                        node_dict_inbag = reest_node_vals_inbag[i],
+                                                        node_dict_oob = reest_node_vals_oob[i],
+                                                        alpha=alpha, type=tree.treetype)
                 conf_int_nodes.append(conf_int)
                 m_nodes.append(m)
             elif shrinkage_type=="effect_size":

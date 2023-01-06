@@ -110,24 +110,20 @@ def conf_int_ratio_two_var(pop_1, pop_2, alpha=0.05):
 
     return conf_int, m
 
-def calc_node_val(pop_2):
-    val, cnts = np.unique(pop_2, return_counts=True)
-    counts = {k: v for k, v in zip(val, cnts)}
-
-    clf_value_dis = [counts.get(0) or 0, counts.get(1) or 0]
-    n_samples = np.sum(clf_value_dis)
-
-    clf_prob_dis = (np.array(clf_value_dis) / n_samples)
-    leaf_value = np.argmax(clf_prob_dis)
-
-    return leaf_value
-
-def conf_int_ratio_mse_ratio(pop_1, pop_2, node_val_inbag, type="regression", alpha=0.05):
+def conf_int_ratio_mse_ratio(pop_1, pop_2, node_val_inbag, node_dict_inbag, node_dict_oob, type="regression", alpha=0.05):
     '''Calculate shrinkage parameter based on confidence interval based on 2-sample difference in MSE'''
 
     # number of samples per population
     n1 = len(pop_1) #pop1 = y_true_inbag
     n2 = len(pop_2) #pop2 = y_true_oob
+
+    # Get reestiated node values oob
+    if type=="classification":
+        node_val_oob = node_dict_oob["value"] # 0 or 1
+        node_prob_oob = node_dict_oob["prob_distribution"] # probability dis between 0 and 1
+        node_prob_inbag = node_dict_inbag["prob_distribution"]
+    else:
+        node_val_oob = node_dict_oob["value"] # mean value of targets in node
 
     #full array of node vals for MSE calc
     node_val_pop1 = np.full(pop_1.shape, node_val_inbag)
@@ -140,12 +136,16 @@ def conf_int_ratio_mse_ratio(pop_1, pop_2, node_val_inbag, type="regression", al
     #if mse inbag & mse oob == 0 then set shrinkage to 1
     if (mse_inbag==0) & (mse_oob==0):
         return np.array([0,0]), 1.
-    #elif mse_oob ==0 and  mse inbag!=0 then check difference in node valeus
+
     elif (mse_inbag!=0) & (mse_oob==0):
-        node_val_oob = calc_node_val(pop_2)
-        if math.isclose(node_val_inbag, node_val_oob): #if close set to 1
+        #check difference in node valeus
+        if math.isclose(node_val_inbag, node_val_oob):
             return np.array([0,0]), 1.
-        elif (node_val_inbag != node_val_oob): #if different set to 0
+        # for clf additionally check if prob distribution is close
+        elif (type=="classification") & (math.isclose(node_prob_inbag, node_prob_oob)):
+            return np.array([0,0]), 1.
+        # otherwise set to 0
+        else:
             return np.array([1,1]), 0.
 
     mse_rat = mse_inbag/mse_oob

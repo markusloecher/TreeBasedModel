@@ -52,30 +52,32 @@ A detailed explanation on how to use the module to instantiate and train differe
 ```python
 # Imports
 from TreeModelsFromScratch.RandomForest import RandomForest
+from TreeModelsFromScratch.datasets import DATASETS_CLASSIFICATION, DATASET_PATH
 from sklearn.model_selection import train_test_split
 from imodels import get_clean_dataset
 
-# prepare data (a sample clinical dataset)
-X, y, feature_names = get_clean_dataset('csi_pecarn_pred')
+# prepare data (a sample "haberman" dataset)
+dset_name, dset_file, data_source = DATASETS_CLASSIFICATION[3]
+X, y, feat_names = get_clean_dataset(dset_file, data_source, DATASET_PATH)
 X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)
 
 # Instantiate and train regular RF for classification (without additional regularization)
-rf = RandomForest(n_trees=100, treetype='classification')
+rf = RandomForest(n_trees=25, treetype='classification')
 rf.fit(X_train, y_train)
 y_pred = rf.predict(X_test)
 
 # Instantiate and train RF with HS applied post-hoc
-rf_hs = RandomForest(n_trees=100, treetype='classification', HShrinkage=True)
+rf_hs = RandomForest(n_trees=25, treetype='classification', HShrinkage=True)
 rf_hs.fit(X_train, y_train)
 y_pred = rf_hs.predict(X_test)
 
 # Instantiate and train RF with AugHS smSHAP applied post-hoc
-rf_aug_smSH = RandomForest(n_trees=100, treetype='classification', oob_SHAP=True, HS_smSHAP=True)
+rf_aug_smSH = RandomForest(n_trees=25, treetype='classification', oob_SHAP=True, HS_smSHAP=True)
 rf_aug_smSH.fit(X_train, y_train)
 y_pred = rf_aug_smSH.predict(X_test)
 
 # Instantiate and train RF with AugHS MSE applied post-hoc
-rf_aug_mse = RandomForest(n_trees=100, treetype='classification', HS_nodewise_shrink_type="MSE_ratio")
+rf_aug_mse = RandomForest(n_trees=25, treetype='classification', HS_nodewise_shrink_type="MSE_ratio")
 rf_aug_mse.fit(X_train, y_train)
 y_pred = rf_aug_mse.predict(X_test)
 ```

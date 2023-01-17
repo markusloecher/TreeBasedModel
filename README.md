@@ -24,7 +24,7 @@ git clone git@github.com:Heity94/AugmentedHierarchicalShrinkage.git
 cd AugmentedHierarchicalShrinkage/
 ```
 ### Create and activate virtual environment
-To avoid dependency issues we recommend to create a new virtual environment to install and run our code.
+To avoid dependency issues we recommend to create a new virtual environment to install and run our code. Please note, that in order to follow the next steps [pyenv](https://github.com/pyenv/pyenv) and [pyenv-virtualenv](https://github.com/pyenv/pyenv-virtualenv) need to be installed.
 1. Create a virtual environment using `pyenv virtualenv`. You can of course use another name as `aug_hs_env` for the environment.
 ```bash
 pyenv virtualenv aug_hs_env

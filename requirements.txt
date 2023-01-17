@@ -21,3 +21,6 @@ pmlb
 # utilities
 six>=1.14
 tqdm>=4.64.1
+
+# jupyter (required to recreate experiments)
+jupyterlab

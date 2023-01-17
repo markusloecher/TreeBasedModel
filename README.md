@@ -47,7 +47,7 @@ pip install -e .
 
 After successful installation you should be able to use the `TreeModelsfromScratch` module to instantiate Random Forest models with AugHS and run and recreate the experiments in the `notebooks` folder.
 
-A detailed explanation on how to use the module to instantiate and train different RF models can be found in `notebooks/Documentation_TreeModelsfromScratch.ipynb`
+A detailed explanation on how to use the module to instantiate and train different RF models can be found in [`notebooks/Documentation_TreeModelsfromScratch.ipynb`](Documentation_TreeModelsfromScratch.ipynb)
 
 ```python
 # Imports

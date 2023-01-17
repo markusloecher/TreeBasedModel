@@ -47,7 +47,7 @@ pip install -e .
 
 After successful installation you should be able to use the `TreeModelsfromScratch` module to instantiate Random Forest models with AugHS and run and recreate the experiments in the `notebooks` folder.
 
-A detailed explanation on how to use the module to instantiate and train different RF models can be found in `notebooks/Example_TreeModels.ipynb`
+A detailed explanation on how to use the module to instantiate and train different RF models can be found in `notebooks/Documentation_TreeModelsfromScratch.ipynb`
 
 ```python
 # Imports
@@ -67,17 +67,17 @@ rf.fit(X_train, y_train)
 y_pred = rf.predict(X_test)
 
 # Instantiate and train RF with HS applied post-hoc
-rf_hs = RandomForest(n_trees=25, treetype='classification', HShrinkage=True)
+rf_hs = RandomForest(n_trees=25, treetype='classification', HShrinkage=True, HS_lambda=10)
 rf_hs.fit(X_train, y_train)
 y_pred = rf_hs.predict(X_test)
 
 # Instantiate and train RF with AugHS smSHAP applied post-hoc
-rf_aug_smSH = RandomForest(n_trees=25, treetype='classification', oob_SHAP=True, HS_smSHAP=True)
+rf_aug_smSH = RandomForest(n_trees=25, treetype='classification', HS_lambda=10, oob_SHAP=True, HS_smSHAP=True)
 rf_aug_smSH.fit(X_train, y_train)
 y_pred = rf_aug_smSH.predict(X_test)
 
 # Instantiate and train RF with AugHS MSE applied post-hoc
-rf_aug_mse = RandomForest(n_trees=25, treetype='classification', HS_nodewise_shrink_type="MSE_ratio")
+rf_aug_mse = RandomForest(n_trees=25, treetype='classification', HS_lambda=10, HS_nodewise_shrink_type="MSE_ratio")
 rf_aug_mse.fit(X_train, y_train)
 y_pred = rf_aug_mse.predict(X_test)
 ```

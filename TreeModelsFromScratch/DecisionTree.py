@@ -10,6 +10,53 @@ class Node:
     def __init__(self, feature=None, feature_name=None, threshold=None, left=None, right=None,
                  gain=None, id=None, depth=None, leaf_node=False, samples=None, gini=None,
                  value=None, clf_value_dis=None, clf_prob_dis=None):
+        """A Node class for classification and regression trees.
+
+        Parameters
+        ----------
+            - "node": Node object
+            - "id": node id
+            - "feature": Feature used for splitting in the node
+            - "is_leaf_node": Whether node is leaf node or not
+            - "threshold": Split point for splitting feature
+            - "gini": Impurity in this node (either Gini or MSE for regression)
+            - "samples": Training samples in that node
+            - "value": Predicted value in that node
+            - "value_distribution": Distribution between class 0 and class 1 (For classification only)
+            - "prob_distribution": Probabilityd distribution between class 0 and class 1 (For classification only)
+
+        feature: int
+            Id of feature used for splitting in this node (if not leaf note). Id
+            is determined by order of columns of the training data
+        feature_name: str
+            If feature names are given during fit, the name of the feature used for
+            splitting
+        threshold: float
+            Determined threshold/ split point in that node
+        left: Node instance
+            Left child node of this Node object
+        right: Node instance
+            Right child node of this Node object
+        gain: float
+            Information gain of the split in that node
+        gini: float
+            Gini impurity in this Node.
+        value: int or float
+            Predicted value in this Node due to distribution of target variables
+        clf_value_dis: list
+            Distribution between class 0 and class 1 (For classification only)
+        clf_prob_dis: list
+            Probabilityd distribution between class 0 and class 1 (For classification only)
+        id: int
+            Id of the node
+        depth: int
+            Depth of the Node in the tree (0 for root node)
+        samples: int
+            Number of samples in the Node
+        leaf_node: bool
+            If Node is Leaf Node or not
+        """
+
         self.feature = feature
         self.feature_name = feature_name
         self.threshold = threshold
@@ -32,6 +79,107 @@ class Node:
 class DecisionTree:
     def __init__(self, min_samples_split=2, min_samples_leaf=1, max_depth=None, n_features=None, criterion="gini",
                  treetype="classification", k=None, feature_names=None, HShrinkage=False, HS_lambda=0, random_state=None):
+        """A decision tree model for classification or regression tasks (CART).
+
+        Parameters
+        ----------
+        treetype : {"classification", "regression"}, default="classification"
+            Type of decision tree:
+                - ``classification``: Binary classification tasks
+                - ``regression``: Regression tasks
+        criterion : {"gini", "entropy"}, default="gini"
+            The function to measure the quality of a split. Supported criteria are
+            "gini" for the Gini impurity and "entropy".
+            Please note that for regression trees the criterion is still called "gini",
+            but internally the MSE is used.
+        max_depth : int, default=None
+            The maximum depth of the tree. If None, then nodes are expanded until
+            the split would not lead to additional gain in purity, all leaves are
+            pure or until all leaves contain less than min_samples_split samples.
+        min_samples_split : int, default=2
+            The minimum number of samples required to split an internal node
+        min_samples_leaf : int, default=1
+            The minimum number of samples required to be at a leaf node.
+            A split point at any depth will only be considered if it leaves at
+            least ``min_samples_leaf`` training samples in each of the left and
+            right branches.
+        n_features : int, float or "sqrt", default=None
+            The number of features to consider when looking for the best split
+            (similar to `max_features` in sklearn):
+                - If int, then consider `n_features` features at each split.
+                - If float, then `n_features` is a fraction and
+                `max(1, int(n_features * n_features_in_))` features are considered at
+                each split.
+                - If "sqrt", then `max_features=sqrt(n_features)`.
+                - If None, then `max_features=n_features`.
+        random_state : int, RandomState instance or None, default=None
+            Controls the randomness of the estimator. If e.g. multiple split-points
+            yield the same gain, the best split is chosen randomly from that set.
+            To obtain a deterministic behaviour during fitting, ``random_state``
+            has to be fixed to an integer.
+        HShrinkage : bool, default=False
+            If Hierarchical Shrinkage should be applied post-hoc after fitting.
+            Please note, that if you intend to use HS, you also need to define the
+            `HS_lambda` parameter or use GridSearch.
+        HS_lambda : int, default=0
+            User-defined penalty term used in Hierarchical Shrinkage regularization.
+        k : int, default=None
+            Finite sample correction in Gini impurity
+                - If k=1, impurity is weighted by n/(n-1)
+        feature_names: list, default=None
+            Only relevant for RF model: Can be ignored during instantiation.
+        Attributes
+        ----------
+        feature_importances_ : ndarray of shape (n_features,)
+            The impurity-based feature importances (MDI).
+            The higher, the more important the feature.
+            The importance of a feature is computed as the (normalized)
+            total reduction of the criterion brought by that feature.  It is also
+            known as the Gini importance.
+            Warning: impurity-based feature importances can be misleading for
+            high cardinality features (many unique values).
+        max_depth_ : int
+            The depth of the deepest node within the tree.
+        n_nodes : int
+            The total number of nodes in the tree.
+        n_features_in_ : int
+            Number of features seen during :term:`fit`.
+            .. versionadded:: 0.24
+        feature_names : ndarray of shape (`n_features_in_`,)
+            Names of features seen during `fit`. Defined only when `X`
+            has feature names that are all strings.
+        decision_paths : ndarray
+            List of node ids for each path/branch (decision path) from root to leaf node.
+        decision_paths_str : list of strings
+            Same as `decision_paths` but as list of strings in more readable format
+        node_list : list of Node instances
+            Each fitted DecisonTree model consits of many `Node` objects.
+        node_id_dict : dict
+            Dictionary with detailed information about each Node. Key of the dict
+            is the id of the Node. The `node_id_dict` includes the following information:
+            - "node": Node object
+            - "id": node id
+            - "feature": Feature used for splitting in the node
+            - "is_leaf_node": Whether node is leaf node or not
+            - "threshold": Split point for splitting feature
+            - "gini": Impurity in this node (either Gini or MSE for regression)
+            - "samples": Training samples in that node
+            - "value": Predicted value in that node
+            - "value_distribution": Distribution between class 0 and class 1 (For classification only)
+            - "prob_distribution": Probabilityd distribution between class 0 and class 1 (For classification only)
+        random_state: int, RandomState instance or None
+            The random state declared during instantiation
+        random_state_: RandomState instance
+            The RandomState instance used in the DecisionTree (derived from random_state)
+        Notes
+        -----
+        The default values for the parameters controlling the size of the trees
+        (e.g. ``max_depth``, ``min_samples_leaf``, etc.) lead to fully grown and
+        unpruned trees which can potentially be very large on some data sets. To
+        reduce memory consumption, the complexity and size of the trees should be
+        controlled by setting those parameter values.
+        """
+
         self.min_samples_split=min_samples_split
         self.min_samples_leaf = min_samples_leaf
         self.max_depth=max_depth
@@ -63,6 +211,19 @@ class DecisionTree:
             return seed
 
     def fit(self, X, y):
+        """Build a Decision Tree  from the training set (X, y).
+                Parameters
+                ----------
+                X : {array-like, pd.DataFrame} of shape (n_samples, n_features)
+                    The training input samples
+                y : {array-like, pd.Series} of shape (n_samples,)
+                    The target values (class labels) as integers
+                Returns
+                -------
+                self : DecisionTree
+                    Fitted estimator.
+                """
+
         #self.n_features = X.shape[1] if not self.n_features else min(X.shape[1], self.n_features)
         if not self.n_features:
             self.n_features = X.shape[1]
@@ -361,6 +522,18 @@ class DecisionTree:
             return np.array([self._traverse_tree(x, self.root) for x in X])
 
     def predict_proba(self, X):
+        """Predict class probabilities of the input samples X.
+        The predicted class probability is the fraction of samples of the same
+        class in a leaf. Can only be used if `treetype="classification"`
+        Parameters
+        ----------
+        X : {array-like, pd.DataFrame} of shape (n_samples, n_features)
+            The training input samples
+        Returns
+        -------
+        proba : ndarray of shape (n_samples, 2)
+            The class probabilities of the input samples.
+        """
 
         # If function is called on a regression tree return nothing
         if self.treetype != "classification":
@@ -409,7 +582,8 @@ class DecisionTree:
 
 
     def traverse_explain_path(self, x, node=None, dict_list=None):
-        """Return taken decision path in the tree for the given sample and dict with detailed information about decision path"""
+        """Return taken decision path in the tree for the given sample and dict
+        with detailed information about decision path"""
         if dict_list is None:
             dict_list = []
 
@@ -442,7 +616,21 @@ class DecisionTree:
 
 
     def explain_decision_path(self, X):
-        """Takes one ore more observations and explains the samples path along the tree and returns decision path and detailed information about path"""
+        """
+        Takes one ore more observations and explains the samples path along
+        the tree and returns decision path and detailed information about path
+        Parameters
+        ----------
+        X : {array-like, pd.DataFrame} of shape (n_samples, n_features)
+            The samples for which the decision path should be explained
+        Returns
+        -------
+        dec_path : ndarray of shape (n_samples, 2)
+            First item of the array contains a list of the node ids the sample passed
+            along its decision path
+            The second item of the array contains a list of dictonaries with more detailed
+            information about the path: "feature", "threshold", "value", and "decision"
+        """
         if isinstance(X, pd.DataFrame):
             X = X.values
 
@@ -610,6 +798,22 @@ class DecisionTree:
 
 
     def export_tree_for_SHAP(self, return_tree_dict=False):
+        """
+        Exports DecisionTree model into readable format for SHAP
+        Parameters
+        ----------
+        return_tree_dict : bool, default=False
+            Only used for RF models. Can be ignored
+        Returns
+        -------
+        model : dict
+            Dictonary with one key "trees" which is readable by SHAP Tree Explainer.
+        Example
+        -------
+        >>export_model = tree.export_tree_for_SHAP()
+        >>explainer = shap.TreeExplainer(export_model)
+        >>shap_vals = explainer.shap_values(X_train, y_train)
+        """
 
         # Children
         children_left = []

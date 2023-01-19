@@ -5,7 +5,6 @@
 raw_data/
 data/**/*.pickle
 data/**/*.txt
-data/**/*.png
 data/**/*.gz
 *.csv
 **/__pycache__/

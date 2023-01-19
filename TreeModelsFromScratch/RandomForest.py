@@ -10,27 +10,101 @@ from shap import TreeExplainer
 from TreeModelsFromScratch.SmoothShap import verify_shap_model, smooth_shap, conf_int_ratio_two_var, conf_int_cohens_d, conf_int_ratio_mse_ratio
 
 class RandomForest:
-    def __init__(self,
-                 n_trees=10,
-                 max_depth=None,
-                 min_samples_split=2,
-                 min_samples_leaf=1,
-                 n_feature="sqrt",
-                 bootstrap=True,
-                 oob=True,
-                 oob_SHAP=False,
-                 criterion="gini",
-                 treetype="classification",
-                 HShrinkage=False,
-                 HS_lambda=0,
-                 HS_smSHAP=False,
-                 HS_nodewise_shrink_type=None,
-                 cohen_reg_param=2,
-                 alpha=0.05,
-                 cohen_statistic="f",
-                 k=None,
-                 random_state=None,
-                 testHS=False):
+    def __init__(self, n_trees=10, max_depth=None, min_samples_split=2, min_samples_leaf=1, n_feature="sqrt",
+                 bootstrap=True, oob=True, oob_SHAP=False, criterion="gini", treetype="classification", HShrinkage=False,
+                 HS_lambda=0, HS_smSHAP=False, HS_nodewise_shrink_type=None, cohen_reg_param=2, alpha=0.05,
+                 cohen_statistic="f", k=None, random_state=None, testHS=False):
+        """A random forest model for classification or regression tasks.
+
+        Parameters
+        ----------
+        treetype : {"classification", "regression"}, default="classification"
+            Type of decision tree:
+                - ``classification``: Binary classification tasks
+                - ``regression``: Regression tasks
+        criterion : {"gini", "entropy"}, default="gini"
+            The function to measure the quality of a split. Supported criteria are
+            "gini" for the Gini impurity and "entropy".
+            Please note that for regression trees the criterion is still called "gini",
+            but internally the MSE is used.
+        max_depth : int, default=None
+            The maximum depth of the tree. If None, then nodes are expanded until
+            the split would not lead to additional gain in purity, all leaves are
+            pure or until all leaves contain less than min_samples_split samples.
+        min_samples_split : int, default=2
+            The minimum number of samples required to split an internal node
+        min_samples_leaf : int, default=1
+            The minimum number of samples required to be at a leaf node.
+            A split point at any depth will only be considered if it leaves at
+            least ``min_samples_leaf`` training samples in each of the left and
+            right branches.
+        n_feature : int, float or "sqrt", default=None
+            The number of features to consider when looking for the best split
+            (similar to `max_features` in sklearn):
+                - If int, then consider `n_feature` features at each split.
+                - If float, then `n_feature` is a fraction and
+                `max(1, int(n_feature * n_features_in_))` features are considered at
+                each split.
+                - If "sqrt", then `max_features=sqrt(n_feature)`.
+                - If None, then `max_features=n_feature`.
+        random_state : int, RandomState instance or None, default=None
+            Controls the randomness of the estimator. If e.g. multiple split-points
+            yield the same gain, the best split is chosen randomly from that set.
+            To obtain a deterministic behaviour during fitting, ``random_state``
+            has to be fixed to an integer.
+        HShrinkage : bool, default=False
+            If Hierarchical Shrinkage should be applied post-hoc after fitting.
+            Please note, that if you intend to use HS, you also need to define the
+            `HS_lambda` parameter or use GridSearch.
+        HS_lambda : int, default=0
+            User-defined penalty term used in Hierarchical Shrinkage regularization.
+        bootstrap : bool, default=True
+            If bootstrap sampling should be used to fit the ensemble. If `False`
+            each tree in the ensemble will use the complete training data during
+            fitting
+        oob : bool, default=True
+            If OOB samples should be stored and used to calculate unbiased estimator
+            of model performance.
+        oob_SHAP : bool, default=False
+            If True inbag and OOB SHAP values are calculated for the ensemble and
+            stored as class attributes.
+            Note that `oob=True` in order to calculate oob SHAP values
+        HS_smSHAP : bool, default=False
+            If True AugHS smSHAP regularization will be used post-hoc after fitting.
+            Note that `oob=True` and `oob_SHAP=True` in order to be able to use AugHS smSHAP
+        HS_nodewise_shrink_type : {"MSE_ratio"}, default=None
+            If AugHS MSE regularization should be used post-hoc after fitting.
+            Note that `oob=True` in order to be able to use AugHS MSE
+        alpha : float, default=0.05
+            Alpha used to determine the confidence interval in AugHS MSE regularization.
+        cohen_statistic : {"f"}, default=None
+            Not implemented. Alternative to AugHS MSE.
+        cohen_reg_param : int, default=2
+            Not implemented. Alternative to AugHS MSE.
+        testHS : bool, default=False
+            Used for testing of other HS penalties which can be implemented in the
+            DecisionTree._apply_hierarchical_srinkage function.
+        k : int, default=None
+            Finite sample correction in Gini impurity
+                - If k=1, impurity is weighted by n/(n-1)
+        Attributes
+        ----------
+        feature_importances_ : ndarray of shape (n_features,)
+            The impurity-based feature importances (MDI).
+            The higher, the more important the feature.
+            The importance of a feature is computed as the (normalized)
+            total reduction of the criterion brought by that feature.  It is also
+            known as the Gini importance.
+            Warning: impurity-based feature importances can be misleading for
+            high cardinality features (many unique values).
+        trees : list of DecisionTree instances
+            List of fitted DecisonTree models in the RF ensemble.
+        random_state: int, RandomState instance or None
+            The random state declared during instantiation
+        random_state_: RandomState instance
+            The RandomState instance used in the DecisionTree (derived from random_state)
+        """
+
         self.n_trees = n_trees
         self.max_depth=max_depth
         self.min_samples_split=min_samples_split
@@ -66,6 +140,19 @@ class RandomForest:
             return seed
 
     def fit(self, X, y):
+        """Build a Random Forest  from the training set (X, y).
+        Parameters
+        ----------
+        X : {array-like, pd.DataFrame} of shape (n_samples, n_features)
+            The training input samples
+        y : {array-like, pd.Series} of shape (n_samples,)
+            The target values (class labels) as integers
+        Returns
+        -------
+        self : DecisionTree
+            Fitted estimator.
+        """
+
         self.trees = []
 
         if isinstance(X, pd.DataFrame):
@@ -235,7 +322,18 @@ class RandomForest:
         return X_oob, y_oob, idxs_oob
 
     def predict_proba(self, X):
-
+        """Predict class probabilities of the input samples X.
+        The predicted class probability is the fraction of samples of the same
+        class in a leaf. Can only be used if `treetype="classification"`
+        Parameters
+        ----------
+        X : {array-like, pd.DataFrame} of shape (n_samples, n_features)
+            The training input samples
+        Returns
+        -------
+        proba : ndarray of shape (n_samples, 2)
+            The class probabilities of the input samples.
+        """
         # If function is called on a regression tree return nothing
         if self.treetype != "classification":
             message = "This function is only available for classification tasks. This model is of type {}".format(
@@ -254,6 +352,18 @@ class RandomForest:
         return predictions
 
     def predict(self, X):
+        """
+        - Classification: Predict class for the input samples X.
+        - Regression: Predict value for the input samples X
+        Parameters
+        ----------
+        X : {array-like, pd.DataFrame} of shape (n_samples, n_features)
+            The training input samples
+        Returns
+        -------
+        proba : ndarray of shape (n_samples, 2)
+            The class probabilities of the input samples.
+        """
         if isinstance(X, pd.DataFrame):
             X = X.values
 
@@ -268,6 +378,19 @@ class RandomForest:
             return predictions
 
     def export_forest_for_SHAP(self):
+        """
+        Exports RandomForest model into readable format for SHAP
+        Returns
+        -------
+        model : list
+            List of SHAP SingleTree models which is readable by SHAP Tree Explainer to
+            recreate the RF model.
+        Example
+        -------
+        >>export_model = rf.export_forest_for_SHAP()
+        >>explainer = shap.TreeExplainer(export_model)
+        >>shap_vals = explainer.shap_values(X_train, y_train)
+        """
         tree_dicts = []
         for tree in self.trees:
 
@@ -333,7 +456,7 @@ class RandomForest:
         self.smSHAP_HS_applied=True
 
     def apply_nodewise_HS(self, tree, X_inbag, y_inbag, X_oob, y_oob, shrinkage_type="MSE_ratio", HS_lambda=0, cohen_reg_param=2, alpha=0.05, cohen_statistic="f", testHS=False):
-        '''Apply HS using smoothing coefficient based on discrepancies between inbag and oob data. Overwrites values of fitted tree. Can also be applied post hoc'''
+        '''Apply HS using smoothing coefficient based on discrepancies between inbag and oob data. Overwrites values of fitted tree.'''
 
         #check if forest already used HS during training: if yes, return error
         if (tree.HS_applied==True) | (self.nodewise_HS_applied==True):

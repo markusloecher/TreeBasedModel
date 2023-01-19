@@ -513,6 +513,18 @@ class DecisionTree:
         return np.mean(y)
 
     def predict(self, X):
+        """
+        - Classification: Predict class for the input samples X.
+        - Regression: Predict value for the input samples X
+        Parameters
+        ----------
+        X : {array-like, pd.DataFrame} of shape (n_samples, n_features)
+            The training input samples
+        Returns
+        -------
+        proba : ndarray of shape (n_samples, 2)
+            The class probabilities of the input samples.
+        """
         if isinstance(X, pd.DataFrame):
             X = X.values
 

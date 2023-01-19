@@ -40,7 +40,24 @@ def verify_shap_model(tree, explainer, X):
 
 
 def smooth_shap(shap_values_inbag, shap_values_oob, detailed_output=False):
-    """Compute smooth shap score per feature based on oob and inbag correlations"""
+    """
+    Compute smooth shap score per feature based on oob and inbag SHAP correlations.
+    Parameters
+    ----------
+    shap_values_inbag : ndarray of shape (n_samples, n_features)
+        SHAP values calculated on Inbag samples
+    shap_values_oob : ndarray of shape (n_samples, n_features)
+        SHAP values calculated on OOB samples
+    detailed_output : bool, default=False
+        If linear models and shap_vals should also be returned
+    Returns
+    -------
+    smooth_shap_vals: ndarray of shape (n_samples, n_features)
+    mean_smooth_shap: array of shape (n_features,)
+    lin_coefs : list
+        List of coefficients obtained from linear models used to smooth SHAP values.
+        Order of features depends on order of the given samples.
+    """
 
     lin_models = []
     lin_coefs = []
@@ -84,7 +101,10 @@ def smooth_shap(shap_values_inbag, shap_values_oob, detailed_output=False):
 
 
 def conf_int_ratio_two_var(pop_1, pop_2, alpha=0.05):
-    '''Calculate shrinkage parameter based on confidence interval based on 2-sample difference in variances'''
+    '''
+    Not used in Thesis.
+    Calculate shrinkage parameter based on confidence interval based on 2-sample difference in variances.
+    '''
 
     # number of samples per population
     n1 = len(pop_1)
@@ -111,7 +131,7 @@ def conf_int_ratio_two_var(pop_1, pop_2, alpha=0.05):
     return conf_int, m
 
 def conf_int_ratio_mse_ratio(pop_1, pop_2, node_val_inbag, node_dict_inbag, node_dict_oob, type="regression", alpha=0.05):
-    '''Calculate shrinkage parameter based on confidence interval based on 2-sample difference in MSE'''
+    '''AugHS MSE: Calculate shrinkage parameter based on confidence interval based on 2-sample difference in MSE'''
 
     # number of samples per population
     n1 = len(pop_1) #pop1 = y_true_inbag
@@ -174,7 +194,8 @@ def conf_int_ratio_mse_ratio(pop_1, pop_2, node_val_inbag, node_dict_inbag, node
 
 
 def conf_int_cohens_d(pop_1, pop_2, reg_param=2, alpha=0.05, cohen_statistic="f"):
-    '''Calculate shrinkage parameter based on confidence interval based on 2-sample difference in means'''
+    '''Not used in Thesis.
+    Calculate shrinkage parameter based on confidence interval based on 2-sample difference in means'''
 
     # number of samples per population
     n1 = len(pop_1)
@@ -242,7 +263,44 @@ def cross_val_score_scratch(estimator, X, y, cv=10, scoring_func=roc_auc_score, 
 
     return scores
 
-def GridSearchCV_scratch(estimator, grid, X, y, cv=10, scoring_func=None, fit_best_est=True, shuffle=True, pbar=False, random_state=None):
+def GridSearchCV_scratch(estimator, grid, X, y, cv=10, scoring_func=None, fit_best_est=True, shuffle=True, random_state=None):
+    '''Perform k-fold cross validation GridSearch RandomForest models. Similar to sklearn GridSearch.
+    Parameters
+    ----------
+    estimator : RandomForest instance
+        Unfitted RandomForest model
+    grid : dict
+        {model parameter to be tuned: [parameter settings to be tested]
+        The key has to be named exactly as the parameter of the RandomForest model and
+        have to be part of the following list:
+        `["reg_param", "n_trees", "HS_lambda", "max_depth", "min_samples_split",
+        "min_samples_leaf", "k", "n_features", "n_feature", "HShrinkage",
+        "cohen_reg_param", "cohen_statistic", "HS_nodewise_shrink_type]`
+    X : ndarray
+        X data for training and hyperparameter tuning
+    y : ndarray
+        y data for training and hyperparameter tuning
+    cv : int, default=10
+        Number of folds used per parameter setting
+    scoring_func : sklearn scoring function, default=None
+        Function to score  and select the best parameter settings
+    fit_best_est : bool, default=True
+        Fit estimator with best parameter setting
+    shuffle : bool, default =True
+        If shuffling of the data during k-fold should be used
+    random_state : int
+        Random seed to replicate the folds
+    Returns
+    -------
+    results: dict
+        Results for each parameter setting
+        - best_param_comb: Best param combination found
+        - best_test_score: Avg. test score over all k-folds for best param comb
+        - best_test_scores: Test scores over all k-folds for best param comb
+        - mean_test_scores: Avg. test score over all k-folds for all param comb
+        - param_combinations: List of param combinations
+        - cv_scores_p_split: Test scores over all k-folds for all param combs
+    '''
 
     valid_grid_keys = [
         "reg_param", "n_trees", "HS_lambda", "max_depth", "min_samples_split",

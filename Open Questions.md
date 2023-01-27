@@ -4,12 +4,8 @@
  
 -	Du hattest nach unseren meetings meistens/immer eine sehr gute summary geschickt, die auch next action bullets enthielt. Diese gibt es nur als emails, nicht als Dokument irgendwo af drive oder github, richtig ?
 -	Die Notation in Gleichungen (12), (13) ist etwas verwirrend. Die „hats“ sind ja eigentlich für estimates gedacht, aber hier werden doch lediglich die y-Werte eingesetzt, oder? (Und ein Mittelwert mit dem „Strich“ drüber enthält ja keinen Index mehr) Und wollten wir nicht den oob-MSE berechnen, der sich auf dieselbe node prediction wie inbag bezieht? Also eher so etwas:
-$$
-MSE_{in} = \frac{1}{n_{in}-1} \sum_{i=1}^{n_{in}}{(y_{in,i} - \overline{y_{in}})}
-$$
-$$
-MSE_{oob} = \frac{1}{n_{oob}-1} \sum_{i=1}^{n_{oob}}{(y_{oob,i} - \overline{y_{in}})}
-$$
+$$MSE_{in} = \frac{1}{n_{in}-1} \sum_{i=1}^{n_{in}}{(y_{in,i} - \overline{y_{in}})}$$
+$$MSE_{oob} = \frac{1}{n_{oob}-1} \sum_{i=1}^{n_{oob}}{(y_{oob,i} - \overline{y_{in}})}$$
 - Schön zu sehen, dass Du die *Finite sample correction in Gini impurity* ("If k=1, impurity is weighted by n/(n-1)") implementiert hast. Wie schwierig wäre es wohl, den code so zu modifizieren, dass das $k$ im correction factor $n/(n-k)$ von node zu node verschieden ist (und zwar gleich der jeweiligen tree depth)?
               
  

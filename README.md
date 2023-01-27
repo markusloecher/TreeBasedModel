@@ -8,7 +8,7 @@ We developed two methods of AugHS that use the readily available OOB samples in 
 
 In contrast, **AugHS MSE** uses OOB data to recalculate the node values of the trees. Subsequently, we use a hypothesis testing framework to assess how much the newly calculated node values differ from their in-bag versions. If a node shows bias, we reduce its effect on the predictive outcome.
 
-Both versions of AugHS are enclosed in the self-developed python module `TreeModelsfromScratch`, which features algorithms for decision trees and random forests for classification and regression tasks, and tools for model selection, model evaluation, and other utilities.
+Both versions of AugHS are enclosed in the self-developed python module `TreeModelsfromScratch`, which features algorithms for decision trees and random forests for classification and regression tasks, and tools for model selection, model evaluation, and other utilities. The code for the "standard" Decision Tree and Random Forest algorithm is taken from the [MLfromscratch repository](https://github.com/patrickloeber/MLfromscratch).
 
 ## Installation
 

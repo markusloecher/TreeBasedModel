@@ -355,7 +355,7 @@ class DecisionTree:
                     left,
                     right,
                     best_gain,
-                    gini=self._gini(y),
+                    gini=self._gini(y, depth),#does this work ??
                     depth=depth,
                     value=leaf_value,
                     clf_value_dis=clf_value_dis,
@@ -481,7 +481,7 @@ class DecisionTree:
         ps = hist / len(y)
         return -np.sum([p * np.log(p) for p in ps if p>0])
 
-    def _gini(self, y):
+    def _gini(self, y, depth=0):
 
         n = len(y)
         k = self.k
@@ -501,8 +501,10 @@ class DecisionTree:
                 impurity = np.mean((y-np.mean(y))**2) # MSE
 
         # for binary case, finite sample correction, impurity is weighted by n/(n-1)
-        if (k != None) and (n>k):
-            impurity = impurity * n / (n-k)
+        if self.k is not None and n > (self.k + depth):
+            k_effective = depth + self.k
+            impurity = impurity * n / (n - k_effective)
+
         elif (k != None) and (n<=k):
             impurity = 1
         #print("n<=k, error!")

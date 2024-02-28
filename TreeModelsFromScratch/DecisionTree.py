@@ -502,8 +502,13 @@ class DecisionTree:
 
         # for binary case, finite sample correction, impurity is weighted by n/(n-1)
         if self.k is not None and n > (self.k + depth):
+            print("The value of k # {}".format(self.k))
+            print("The depth # {}".format(depth))
+            
             k_effective = depth + self.k
             impurity = impurity * n / (n - k_effective)
+            
+            print("The impurity value after using k and depth # {}".format(impurity))
 
         elif (k != None) and (n<=k):
             impurity = 1

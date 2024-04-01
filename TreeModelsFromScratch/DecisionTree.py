@@ -510,6 +510,7 @@ class DecisionTree:
 
         # Modify k_effective calculation based on depth_dof
         if self.depth_dof:
+            print(self.depth_dof)
             k_effective = depth + self.k
         else:
             k_effective = self.k

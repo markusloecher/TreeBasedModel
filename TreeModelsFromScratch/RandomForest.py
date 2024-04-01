@@ -13,7 +13,7 @@ class RandomForest:
     def __init__(self, n_trees=10, max_depth=None, min_samples_split=2, min_samples_leaf=1, n_feature="sqrt",
                  bootstrap=True, oob=True, oob_SHAP=False, criterion="gini", treetype="classification", HShrinkage=False,
                  HS_lambda=0, HS_smSHAP=False, HS_nodewise_shrink_type=None, cohen_reg_param=2, alpha=0.05,
-                 cohen_statistic="f", k=None, random_state=None, testHS=False):
+                 cohen_statistic="f", k=None, random_state=None, testHS=False, depth_dof=False):
         """A random forest model for classification or regression tasks.
 
         Parameters
@@ -131,6 +131,9 @@ class RandomForest:
         self.smSHAP_HS_applied = False
         self.nodewise_HS_applied = False
         self.testHS = testHS
+        
+        # Add new
+        self.depth_dof = depth_dof
 
     def _check_random_state(self, seed):
         if isinstance(seed, numbers.Integral) or seed==None:
@@ -194,7 +197,8 @@ class RandomForest:
                                 HShrinkage=self.HShrinkage,
                                 HS_lambda=self.HS_lambda,
                                 k=self.k,
-                                random_state=seed)#self.random_state)
+                                random_state=seed,
+                                depth_dof=self.depth_dof) # Add new depth_dof
 
             #Draw bootstrap samples (inbag)
             X_inbag, y_inbag, idxs_inbag = self._bootstrap_samples(

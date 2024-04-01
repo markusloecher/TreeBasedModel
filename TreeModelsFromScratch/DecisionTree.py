@@ -71,14 +71,28 @@ class Node:
         self.depth = depth
         self.samples = samples
         self.leaf_node = leaf_node
+        
 
     def is_leaf_node(self):
         return self.leaf_node is not False
 
 
 class DecisionTree:
-    def __init__(self, min_samples_split=2, min_samples_leaf=1, max_depth=None, n_features=None, criterion="gini",
-                 treetype="classification", k=None, feature_names=None, HShrinkage=False, HS_lambda=0, random_state=None):
+    def __init__(
+        self,
+        min_samples_split=2,
+        min_samples_leaf=1,
+        max_depth=None,
+        n_features=None,
+        criterion="gini",
+        treetype="classification",
+        k=None,
+        feature_names=None,
+        HShrinkage=False,
+        HS_lambda=0,
+        random_state=None,
+        depth_dof = False
+        ):
         """A decision tree model for classification or regression tasks (CART).
 
         Parameters
@@ -202,6 +216,10 @@ class DecisionTree:
         self.oob_preds=None #only relevant for random forests oob
         self.oob_shap = None  #only relevant for random forests oob shap
         self.HS_applied = False # to store whether HS already was applied duing fit
+        
+        
+        # Add new depth_dof
+        self.depth_dof = depth_dof
 
     def _check_random_state(self, seed):
         if isinstance(seed, numbers.Integral) or (seed is None):
@@ -482,38 +500,25 @@ class DecisionTree:
         return -np.sum([p * np.log(p) for p in ps if p>0])
 
     def _gini(self, y, depth=0):
-
         n = len(y)
-        k = self.k
-
-        if self.treetype=="classification":
-
+        if self.treetype == "classification":
             _, counts = np.unique(y, return_counts=True)
-
-            probabilities = counts / counts.sum()  # Probability of each class
-
+            probabilities = counts / counts.sum()
             impurity = 1 - sum(probabilities**2)
-
         elif self.treetype == "regression":
-            if len(y) == 0:   # empty data
-                impurity = 0
-            else:
-                impurity = np.mean((y-np.mean(y))**2) # MSE
+            impurity = np.mean((y - np.mean(y))**2)
 
-        # for binary case, finite sample correction, impurity is weighted by n/(n-1)
-        if self.k is not None and n > (self.k + depth):
-            # print("The value of k # {}".format(self.k))
-            # print("The depth # {}".format(depth))
-            
+        # Modify k_effective calculation based on depth_dof
+        if self.depth_dof:
             k_effective = depth + self.k
-            impurity = impurity * n / (n - k_effective)
-            
-            # print("The impurity value after using k and depth # {}".format(impurity))
+        else:
+            k_effective = self.k
 
-        elif (k != None) and (n<=k):
-            impurity = 1
-        #print("n<=k, error!")
-        #print(n)
+        if self.k is not None and n > k_effective:
+            impurity = impurity * n / (n - k_effective)
+        elif self.k is not None and n <= k_effective:
+            impurity = 1  # or other appropriate handling for this edge case
+
         return impurity
 
     def _mean_label(self,y):

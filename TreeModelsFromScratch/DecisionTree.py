@@ -519,8 +519,6 @@ class DecisionTree:
             
         elif self.k is not None and n <= k_effective:
             impurity = 1  # or other appropriate handling for this edge case
-            
-        print("depth_dof # {} & k_effective # {} & depth = {} impurity {}".format(self.depth_dof, k_effective, depth,impurity))
 
         return impurity
 

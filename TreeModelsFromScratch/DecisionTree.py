@@ -510,15 +510,17 @@ class DecisionTree:
 
         # Modify k_effective calculation based on depth_dof
         if self.depth_dof:
-            print(self.depth_dof)
             k_effective = depth + self.k
         else:
             k_effective = self.k
 
-        if self.k is not None and n > k_effective:
+        if (self.k is not None) and (self.depth_dof is True) and (n > k_effective):
             impurity = impurity * n / (n - k_effective)
+            
         elif self.k is not None and n <= k_effective:
             impurity = 1  # or other appropriate handling for this edge case
+            
+        print("depth_dof # {} & k_effective # {} & depth = {}".format(self.depth_dof, self.k, depth))
 
         return impurity
 

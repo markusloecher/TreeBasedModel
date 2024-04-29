@@ -86,7 +86,7 @@ class DecisionTree:
         n_features=None,
         criterion="gini",
         treetype="classification",
-        k=None,
+        k=0,
         feature_names=None,
         HShrinkage=False,
         HS_lambda=0,

@@ -114,7 +114,7 @@ class RandomForest:
         self.oob = oob
         self.oob_SHAP=oob_SHAP #for calculation of shap scores for oob predictions
         self.criterion = criterion
-        self.k = k
+        self.k = 0
         self.HShrinkage = HShrinkage
         self.HS_lambda = HS_lambda
         self.HS_smSHAP = HS_smSHAP # for smooth SHAP hierarchical shrinkage

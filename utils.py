@@ -1,17 +1,13 @@
 import numpy as np
-import numbers
 
 def simulate_data_strobl(n=120, # number of rows in data
-                         relevance=0.15, # signal strength (0 for NULL)
-                         seed=None):
-    """Simulate Strobl-like dataset with corrected dimensions."""
+                         relevance=0.15): # signal strength (0 for NULL)
+    """Simulate Strobl-like dataset with corrected dimensions, ensuring randomness in each run."""
 
-    if isinstance(seed, numbers.Integral) or (seed is None):
-        random_state = np.random.RandomState(seed)
-    elif isinstance(seed, np.random.RandomState):
-        random_state = seed
+    # Create a local random state that is independent in each function call
+    random_state = np.random.RandomState()
 
-    # Assuming you want different types of features but all flattened to a 1D array per type
+    # Simulating different types of features but all flattened to a 1D array per type
     x1 = random_state.standard_normal(size=n)
     x2 = random_state.randint(1, 3, size=n)
     x3 = random_state.randint(1, 5, size=n)

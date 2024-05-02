@@ -340,7 +340,7 @@ class DecisionTree:
         best_feature, best_thresh, best_gain = self._best_split(X, y, feat_idxs)
 
         # If no imporvement is found: Create leaf
-        if (best_gain==-1) or (best_feature is None) or (best_thresh is None):
+        if (best_gain <=0) or (best_feature is None) or (best_thresh is None):
             node = self._create_leaf(leaf_value, clf_value_dis, clf_prob_dis,
                                 y, depth, n_samples)
             return node
@@ -481,10 +481,12 @@ class DecisionTree:
 
         elif criterion=="gini":
             g_l, g_r = self._gini(y[left_idxs]), self._gini(y[right_idxs])
-            child_gini = (n_l/n) * g_l + (n_r/n) * g_r
-
-            # calculate the IG (weighted impurity decrease) (rescaled gain) ==MDI
-            information_gain = (n / self.no_samples_total) * (parent_gini -child_gini)
+            if g_l==1 or g_r==1:
+                information_gain = -1
+            else:
+                child_gini = (n_l/n) * g_l + (n_r/n) * g_r
+                # calculate the IG (weighted impurity decrease) (rescaled gain) ==MDI
+                information_gain = (n / self.no_samples_total) * (parent_gini -child_gini)
 
         return information_gain
 

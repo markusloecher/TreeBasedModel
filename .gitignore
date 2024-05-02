@@ -15,3 +15,5 @@ data/**/*.gz
 **/nohup.out
 *.pdf
 .python-version
+venv310/*
+
